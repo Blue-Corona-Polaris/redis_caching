@@ -11,7 +11,7 @@ import { Redis } from 'ioredis';
       useFactory: () => {
         const client = new Redis({
           host: 'localhost', // Redis host
-          port: 6479,        // Redis port
+          port: 6379,        // Redis port
         });
         return client;
       },
