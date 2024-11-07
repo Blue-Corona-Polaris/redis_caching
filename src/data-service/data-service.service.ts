@@ -277,7 +277,7 @@ export class DataServiceService {
         const dimension = dimensions[Math.floor(Math.random() * dimensions.length)];  // Random dimension for each key
 
         // Construct the Redis key with unique elements for each key generation
-        const key = `tenant:${tenantId}:month:${month}:year:${year}:metrics:[${metric}]:dimensions:[${dimension}]`;
+        const key = `tenant:${tenantId}:month:${month}:year:${year}:metrics:[${metric}]:dimensions:[${dimension}]:id:${currentKeyCount}`;
 
         // Generate a random JSON object as the value
         const value = this.generateRandomJsonObject(currentKeyCount);
