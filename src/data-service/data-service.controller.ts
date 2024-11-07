@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Logger, Post, Delete } from '@nestjs/common';
+import { Controller, Get, Query, Logger, Post, Delete, Body } from '@nestjs/common';
 import { DataServiceService } from './data-service.service'; // Adjust path as needed
 
 @Controller('data-service')
@@ -77,8 +77,9 @@ export class DataServiceController {
     }
 
     @Post('create-bulk-keys')
-    async createBulkKeys(): Promise<string> {
-      await this.dataService.createBulkKeysWithTTL();
+    async createBulkKeys(@Body() body: { totalKeys?: number}): Promise<string> {
+        const totalKeys = body.totalKeys ?? 10_000; 
+      await this.dataService.createBulkKeysWithTTL(totalKeys);
       return 'Bulk keys created successfully!';
     }
 }

@@ -8,6 +8,7 @@ import { RedisService } from '../redis/redis.service';
 @Injectable()
 export class DataServiceService {
   private readonly logger = new Logger(DataServiceService.name);
+  private currentKeyCount = 0;
 
   constructor(
     @InjectModel(DataServiceTitanJobsAggregatedDaily.name) private readonly dataServiceModel: Model<DataServiceTitanJobsAggregatedDaily>,
@@ -253,14 +254,13 @@ export class DataServiceService {
 
 
   // Example method to create multiple keys in Redis with TTL and random JSON objects
-  async createBulkKeysWithTTL(): Promise<{ message: string; timeTaken: number }> {
+  async createBulkKeysWithTTL(totalKeys: number): Promise<{ message: string; timeTaken: number }> {
     const metrics = ['metric1', 'metric2', 'metric3'];
     const dimensions = ['organization', 'campaign', 'platform', 'channel'];
-    const totalKeys = 10_000_000; // 1 crore keys
     const batchSize = 1000; // Number of keys per pipeline batch
     const ttlInSeconds = 3600; // Set TTL for 1 hour (3600 seconds)
 
-    let currentKeyCount = 0;
+    let currentKeyCount = this.currentKeyCount;
 
     // Record the start time
     const startTime = Date.now();
