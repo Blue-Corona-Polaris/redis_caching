@@ -63,14 +63,22 @@ export class DataServiceController {
 
     @Get('scan-keys')
     async scanKeys(@Query('pattern') pattern: string) {
-        // Scan for keys matching the pattern
+      try {
+        // Call the service to scan keys based on the pattern
         const keys = await this.dataService.getKeys(pattern);
-
+  
         // Retrieve values for each key found
         const result = await this.dataService.getValues(keys);
-
+  
         return { keys: result }; // Return the object containing keys and values
+      } catch (error) {
+        return { message: 'Error scanning keys', error: error.message };
+      }
     }
 
-    
+    @Post('create-bulk-keys')
+    async createBulkKeys(): Promise<string> {
+      await this.dataService.createBulkKeysWithTTL();
+      return 'Bulk keys created successfully!';
+    }
 }

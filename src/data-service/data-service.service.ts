@@ -251,11 +251,96 @@ export class DataServiceService {
     }
   }
 
+
+  // Example method to create multiple keys in Redis with TTL and random JSON objects
+  async createBulkKeysWithTTL(): Promise<{ message: string; timeTaken: number }> {
+    const metrics = ['metric1', 'metric2', 'metric3'];
+    const dimensions = ['organization', 'campaign', 'platform', 'channel'];
+    const totalKeys = 10_000_000; // 1 crore keys
+    const batchSize = 1000; // Number of keys per pipeline batch
+    const ttlInSeconds = 3600; // Set TTL for 1 hour (3600 seconds)
+
+    let currentKeyCount = 0;
+
+    // Record the start time
+    const startTime = Date.now();
+
+    while (currentKeyCount < totalKeys) {
+      const pipelineCommands: Array<[string, ...any[]]> = []; // Store pipeline commands here
+
+      for (let i = 0; i < batchSize && currentKeyCount < totalKeys; i++) {
+        // Generate random values for tenant, month, year, metric, and dimension
+        const tenantId = Math.floor(Math.random() * 100) + 1; // Random tenant between 1-100
+        const month = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'][Math.floor(Math.random() * 12)]; // Random month
+        const year = 2024; // Hardcoded year, but this can be randomized if needed
+        const metric = metrics[Math.floor(Math.random() * metrics.length)];  // Random metric for each key
+        const dimension = dimensions[Math.floor(Math.random() * dimensions.length)];  // Random dimension for each key
+
+        // Construct the Redis key with unique elements for each key generation
+        const key = `tenant:${tenantId}:month:${month}:year:${year}:metrics:[${metric}]:dimensions:[${dimension}]`;
+
+        // Generate a random JSON object as the value
+        const value = this.generateRandomJsonObject(currentKeyCount);
+
+        // Add the SET command to the pipeline (key, value)
+        pipelineCommands.push(['set', key, JSON.stringify(value)]);
+
+        // Add the EXPIRE command to set TTL for this key
+        pipelineCommands.push(['expire', key, ttlInSeconds]);
+
+        currentKeyCount++;
+      }
+
+      try {
+        // Execute the pipeline with the batched commands
+        await this.redisService.executePipeline(pipelineCommands);
+        console.log(`Inserted ${currentKeyCount} keys so far...`);
+      } catch (error) {
+        console.error('Error executing pipeline:', error);
+        break; // Break out of the loop if there is an error
+      }
+    }
+
+    // Record the end time
+    const endTime = Date.now();
+
+    // Calculate the time taken in milliseconds
+    const timeTaken = endTime - startTime;
+
+    console.log('All keys created successfully!');
+
+    // Return the response with the time taken
+    return {
+      message: 'Bulk keys created successfully with TTL!',
+      timeTaken,  // Time taken in milliseconds
+    };
+  }
+
+  // Function to generate a random JSON object
+  generateRandomJsonObject(keyIndex: number) {
+    return {
+      id: keyIndex,  // Use the current key count as an ID
+      timestamp: new Date().toISOString(),
+      metricValue: Math.random() * 100, // Random metric value between 0-100
+      dimensions: {
+        organization: Math.random() < 0.5 ? 'orgA' : 'orgB',
+        campaign: Math.random() < 0.5 ? 'campaign1' : 'campaign2',
+        platform: Math.random() < 0.5 ? 'platformX' : 'platformY',
+        channel: Math.random() < 0.5 ? 'channel1' : 'channel2',
+      },
+      extraData: {
+        randomString: Math.random().toString(36).substring(7),  // Random string for extra data
+        isActive: Math.random() < 0.5,  // Random boolean value
+      },
+    };
+  }
+
+
   async deleteKeys(pattern: string): Promise<number> {
     // Use the scan method to get all keys matching the pattern
     const keysToDelete = await this.redisService.scan(pattern);
     const deletedCount = keysToDelete.length;
-  
+
     // Delete the found keys if any
     if (deletedCount > 0) {
       await this.redisService.deleteKeys(pattern);
@@ -263,24 +348,39 @@ export class DataServiceService {
     } else {
       this.logger.log(`No keys found matching pattern: "${pattern}"`);
     }
-  
+
     return deletedCount; // Return the count of deleted keys
   }
-  
-  async getKeys(pattern: string): Promise<string[]> {
-    // Use the RedisService to scan for keys matching the pattern
-    return this.redisService.scan(pattern);
-  }
 
+  // Get keys based on the pattern
+  async getKeys(pattern: string): Promise<string[]> {
+    return this.redisService.scan(pattern); // Delegate scanning to RedisService
+  }
+  // Method to get values for a list of keys
   async getValues(keys: string[]): Promise<{ [key: string]: any }> {
-    // Retrieve values for each key found
-    const valuesPromises = keys.map(key => this.redisService.get(key));
+    // Create an array of promises for fetching values of all keys
+    const valuesPromises = keys.map(async (key) => {
+      try {
+        // Get value for the key using the redisService.get() method
+        const value = await this.redisService.get(key);
+
+        // Return a key-value pair, if the key doesn't exist, return null
+        return { key, value: value || null };
+      } catch (error) {
+        // Log error for failed key fetch
+        this.logger.error(`Error fetching key ${key}: ${error.message}`);
+        return { key, value: null }; // Return null if an error occurs while fetching the key
+      }
+    });
+
+    // Wait for all values to be retrieved
     const values = await Promise.all(valuesPromises);
 
-    // Combine keys and their values into an object
-    return keys.reduce((acc, key, index) => {
-      acc[key] = values[index]; // Assign the corresponding value to the key
+    // Combine the results into a single object
+    return values.reduce((acc, { key, value }) => {
+      acc[key] = value;
       return acc;
     }, {});
   }
+
 }

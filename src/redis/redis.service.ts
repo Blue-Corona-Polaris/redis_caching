@@ -1,15 +1,15 @@
 // redis.service.ts
 import { Injectable, Logger } from '@nestjs/common';
-import { Redis } from 'ioredis';
+import * as Redis from 'ioredis';
 
 @Injectable()
 export class RedisService {
   private readonly logger = new Logger(RedisService.name);
-  private redisClient: Redis;
+  private redisClient: Redis.Redis;
 
   constructor() {
     // Initialize Redis client
-    this.redisClient = new Redis(); // Use your Redis configuration here
+    this.redisClient = new Redis.Redis(); // Use your Redis configuration here
   }
 
   async get<T>(key: string): Promise<T | null> {
@@ -48,22 +48,28 @@ export class RedisService {
     return deletedCount;
   }
 
-  // Method to scan for keys by pattern
+  // Scan Redis for keys that match the pattern
   async scan(pattern: string): Promise<string[]> {
-    let cursor = '0';
+    let cursor = '0'; // Initial cursor for SCAN
     const keys: string[] = [];
 
-    do {
-      // SCAN command to find keys matching the pattern
-      const [nextCursor, foundKeys] = await this.redisClient.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
-      cursor = nextCursor;
-      keys.push(...foundKeys);
-    } while (cursor !== '0'); // Continue until full scan is completed
+    try {
+      // Perform the SCAN operation until cursor returns to '0'
+      do {
+        const [nextCursor, foundKeys] = await this.redisClient.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        cursor = nextCursor; // Update cursor for the next batch
+        keys.push(...foundKeys); // Add found keys to the list
+      } while (cursor !== '0'); // Continue until full scan is completed
 
-    this.logger.log(`Found ${keys.length} keys matching pattern "${pattern}"`);
+      this.logger.log(`Found ${keys.length} keys matching pattern "${pattern}"`);
+    } catch (error) {
+      this.logger.error(`Error scanning keys: ${error.message}`);
+      throw error; // Throw the error to be caught in the controller
+    }
+
     return keys; // Return the found keys
   }
-
+  
   // Method to delete keys by pattern
   async deleteByPattern(pattern: string): Promise<number> {
     const keysToDelete = await this.scan(pattern);
@@ -93,5 +99,19 @@ export class RedisService {
     }
 
     return deletedCount; // Return the count of deleted keys
+  }
+
+  async executePipeline(commands: Array<[string, ...any[]]>): Promise<any[]> {
+    const pipeline = this.redisClient.pipeline(); // Start a Redis pipeline
+
+    // Add commands to the pipeline
+    commands.forEach((command) => {
+      // Ensure command is a tuple: ['set', key, value]
+      pipeline[command[0]](...command.slice(1));  // This should now work, as command is typed correctly
+    });
+
+    // Execute the pipeline
+    const results = await pipeline.exec();
+    return results;
   }
 }
