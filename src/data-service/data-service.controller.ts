@@ -194,4 +194,29 @@ export class DataServiceController {
             throw new BadRequestException(error.message);
         }
     }
+
+    // API to store hashed and compressed keys
+    @Post('store-hashed-compressed-keys')
+    async storeHashedCompressedKeys(@Body() config: any): Promise<{ message: string; timeTaken: number }> {
+        return await this.dataService.storeHashedCompressedKeys(config);
+    }
+
+    // API to retrieve value by hashed key
+    @Get('retrieve-hashed-compressed-key')
+    async retrieveHashedCompressedKey(
+        @Query('metricId') metricId: number,
+        @Query('tenantId') tenantId: number,
+        @Query('year') year: number,
+        @Query('month') month: string,
+        @Query('dimension') dimension: string,
+    ): Promise<any> {
+        const key = this.dataService.generateShortHashedKey(metricId, tenantId, year, month, dimension);
+        return await this.dataService.fetchCompressedValue(key);
+    }
+
+    @Post('create-dynamic-keys')
+    async createDynamicKeys(@Body() config: any): Promise<{ message: string; totalKeys: number; timeTaken: number }> {
+        return await this.dataService.createDynamicallyCalculatedKeys(config);
+    }
+
 }

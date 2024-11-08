@@ -1,4 +1,4 @@
-// redis.service.ts
+// src/redis/redis.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import * as Redis from 'ioredis';
 
@@ -12,16 +12,19 @@ export class RedisService {
     this.redisClient = new Redis.Redis(); // Use your Redis configuration here
   }
 
+  // Get value by key
   async get<T>(key: string): Promise<T | null> {
     const data = await this.redisClient.get(key);
     return data ? JSON.parse(data) : null;
   }
 
+  // Set value by key with TTL
   async set(key: string, value: any, ttl: number): Promise<void> {
     await this.redisClient.set(key, JSON.stringify(value), 'EX', ttl);
     this.logger.log(`Stored key: ${key} with TTL: ${ttl}`);
   }
 
+  // Delete key by key
   async del(key: string): Promise<void> {
     await this.redisClient.del(key);
     this.logger.log(`Deleted key: ${key}`);
@@ -101,6 +104,7 @@ export class RedisService {
     return deletedCount; // Return the count of deleted keys
   }
 
+  // Method to execute Redis commands in a pipeline
   async executePipeline(commands: Array<[string, ...any[]]>): Promise<any[]> {
     const pipeline = this.redisClient.pipeline(); // Start a Redis pipeline
 
@@ -113,5 +117,11 @@ export class RedisService {
     // Execute the pipeline
     const results = await pipeline.exec();
     return results;
+  }
+
+  // Get TTL for a key
+  async getTTL(key: string): Promise<number> {
+    const ttl = await this.redisClient.ttl(key);
+    return ttl;
   }
 }

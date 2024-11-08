@@ -7,9 +7,13 @@ import { RedisService } from '../redis/redis.service';
 import { createHash } from 'crypto';
 import { promisify } from 'util';
 import * as zlib from 'zlib';
+import * as crypto from 'node:crypto';
 
 const zipAsync = promisify(zlib.gzip);
 const unzipAsync = promisify(zlib.gunzip);
+
+const gzipAsync = promisify(zlib.gzip);
+const gunzipAsync = promisify(zlib.gunzip);
 
 @Injectable()
 export class DataServiceService {
@@ -672,4 +676,151 @@ export class DataServiceService {
 
     return JSON.parse(decompressedValue.toString());
   }
+
+  async storeHashedCompressedKeys(config: any): Promise<{ message: string; timeTaken: number }> {
+    const months = config.months || ['january', 'february', 'march', 'april'];
+    const years = config.years || [2023, 2024];
+    const totalTenants = config.totalTenants || 500;
+    const totalMetrics = config.totalMetrics || 400;
+    const dimensions = config.dimensions || ['organization', 'campaign', 'platform', 'channel'];
+    const batchSize = config.batchSize || 1000;
+    const ttlInSeconds = config.ttlInSeconds || 3600;
+    const totalKeys = config.totalKeys || 10_000_000;
+
+    let currentKeyCount = 0;
+    const startTime = Date.now();
+
+    while (currentKeyCount < totalKeys) {
+      const pipelineCommands: Array<[string, ...any[]]> = [];
+
+      for (let i = 0; i < batchSize && currentKeyCount < totalKeys; i++) {
+        const tenantId = Math.floor(Math.random() * totalTenants) + 1;
+        const month = months[Math.floor(Math.random() * months.length)];
+        const year = years[Math.floor(Math.random() * years.length)];
+        const metricId = Math.floor(Math.random() * totalMetrics) + 1;
+        const dimension = dimensions[Math.floor(Math.random() * dimensions.length)];
+
+        const key = this.generateShortHashedKey(metricId, tenantId, year, month, dimension);
+        const jsonValue = this.generateRandomJsonObject(currentKeyCount);
+        const compressedValue = await this.compressValue(jsonValue);
+
+        pipelineCommands.push(['set', key, compressedValue.toString('base64')]);
+        pipelineCommands.push(['expire', key, ttlInSeconds]);
+
+        currentKeyCount++;
+      }
+
+      try {
+        await this.redisService.executePipeline(pipelineCommands);
+        console.log(`Stored ${currentKeyCount} keys so far...`);
+      } catch (error) {
+        console.error('Error in pipeline execution:', error);
+        break;
+      }
+    }
+
+    const endTime = Date.now();
+    const timeTaken = endTime - startTime;
+
+    return {
+      message: 'Hashed and compressed keys stored successfully!',
+      timeTaken,
+    };
+  }
+
+  async fetchCompressedValue(key: string): Promise<any> {
+    const compressedData = await this.redisService.get<string>(key);
+  
+    if (!compressedData) {
+      return { message: 'Key not found' };
+    }
+  
+    return await this.decompressValue(compressedData);
+  }
+
+
+  async compressValue(data: any): Promise<Buffer> {
+    return await gzipAsync(JSON.stringify(data));
+  }
+
+  async decompressValue(compressedData: string): Promise<any> {
+    const buffer = Buffer.from(compressedData, 'base64');
+    const decompressedData = await gunzipAsync(buffer);
+    return JSON.parse(decompressedData.toString());
+  }
+
+  generateShortHashedKey(metricId: number, tenantId: number, year: number, month: string, dimension: string): string {
+    const dimensionHash = crypto.createHash('md5').update(dimension).digest('hex').slice(0, 8);
+    return `m:${metricId}:t:${tenantId}:y:${year}:m:${month}:d:${dimensionHash}`;
+  }
+
+  async createDynamicallyCalculatedKeys(config: {
+    months: string[];
+    years: number[];
+    totalTenants: number;
+    totalMetrics: number;
+    dimensions: string[];
+    batchSize: number;
+    ttlInSeconds: number;
+  }): Promise<{ message: string; totalKeys: number; timeTaken: number }> {
+    const { months, years, totalTenants, totalMetrics, dimensions, batchSize, ttlInSeconds } = config;
+
+    // Calculate the total number of keys dynamically
+    const totalKeys = totalMetrics * totalTenants * years.length * months.length * dimensions.length;
+    let currentKeyCount = 0;
+
+    console.log(`Total keys to be generated: ${totalKeys}`);
+
+    // Record the start time
+    const startTime = Date.now();
+
+    // Loop until all keys are created
+    while (currentKeyCount < totalKeys) {
+      const pipelineCommands: Array<[string, ...any[]]> = [];
+
+      for (let i = 0; i < batchSize && currentKeyCount < totalKeys; i++) {
+        // Generate random values for tenantId, month, year, metricId, and dimension
+        const tenantId = Math.floor(Math.random() * totalTenants) + 1;
+        const month = months[Math.floor(Math.random() * months.length)];
+        const year = years[Math.floor(Math.random() * years.length)];
+        const metricId = Math.floor(Math.random() * totalMetrics) + 1;
+        const dimension = dimensions[Math.floor(Math.random() * dimensions.length)];
+
+        // Construct a shorter Redis key
+        const key = `m:${metricId}:t:${tenantId}:y:${year}:mo:${month}:d:${dimension}`;
+
+        // Generate a random value and compress it
+        const value = await this.compressValue(JSON.stringify(this.generateRandomJsonObject(currentKeyCount)));
+
+        // Add SET and EXPIRE commands to the pipeline
+        pipelineCommands.push(['set', key, value]);
+        pipelineCommands.push(['expire', key, ttlInSeconds]);
+
+        currentKeyCount++;
+      }
+
+      // Execute the pipeline with the batched commands
+      try {
+        await this.redisService.executePipeline(pipelineCommands);
+        console.log(`Inserted ${currentKeyCount}/${totalKeys} keys so far...`);
+      } catch (error) {
+        console.error('Error executing pipeline:', error);
+        break;
+      }
+    }
+
+    // Record the end time
+    const endTime = Date.now();
+    const timeTaken = endTime - startTime;
+
+    console.log('All keys created successfully!');
+
+    return {
+      message: 'Bulk keys created successfully!',
+      totalKeys,
+      timeTaken,
+    };
+  }
+
 }
+
