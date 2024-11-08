@@ -159,4 +159,39 @@ export class DataServiceController {
         }
     }
 
+    // API to create bulk keys with compressed (zipped) values
+    @Post('create-zipped-hashed-keys')
+    async createZippedHashedKeys(): Promise<{ message: string; timeTaken: number }> {
+        try {
+            return await this.dataService.createZippedHashedKeys();
+        } catch (error) {
+            throw new BadRequestException(error.message);
+        }
+    }
+
+    // API to get unzipped value based on hashed key format
+    @Get('get-unzipped-value-hashed')
+    async getUnzippedValueHashed(
+        @Query('metricId') metricId: string,
+        @Query('tenantId') tenantId: string,
+        @Query('year') year: string,
+        @Query('month') month: string,
+        @Query('dimensions') dimensions: string,
+    ): Promise<{ key: string; value: any }> {
+        try {
+            const metricIdNum = parseInt(metricId, 10);
+            const tenantIdNum = parseInt(tenantId, 10);
+            const yearNum = parseInt(year, 10);
+            const dimensionArray = dimensions.split(',');
+
+            const value = await this.dataService.getUnzippedValueHashed(metricIdNum, tenantIdNum, yearNum, month, dimensionArray);
+
+            const dimensionHash = this.dataService.hashDimensions(dimensionArray);
+            const key = `${metricIdNum}:${tenantIdNum}:${yearNum}:${month}:dimHash:${dimensionHash}`;
+
+            return { key, value };
+        } catch (error) {
+            throw new BadRequestException(error.message);
+        }
+    }
 }

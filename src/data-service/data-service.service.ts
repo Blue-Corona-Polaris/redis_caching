@@ -5,6 +5,11 @@ import { Model } from 'mongoose';
 import { DataServiceTitanJobsAggregatedDaily } from './data-service.schema';
 import { RedisService } from '../redis/redis.service';
 import { createHash } from 'crypto';
+import { promisify } from 'util';
+import * as zlib from 'zlib';
+
+const zipAsync = promisify(zlib.gzip);
+const unzipAsync = promisify(zlib.gunzip);
 
 @Injectable()
 export class DataServiceService {
@@ -529,7 +534,7 @@ export class DataServiceService {
 
 
   // Utility function to hash the dimensions array
-  private hashDimensions(dimensions: string[]): string {
+  public hashDimensions(dimensions: string[]): string {
     const dimensionString = dimensions.join(',');
     return createHash('md5').update(dimensionString).digest('hex').slice(0, 8);
   }
@@ -597,4 +602,74 @@ export class DataServiceService {
     return value;
   }
 
+
+  // Method to create keys in Redis with compressed (zipped) values
+  async createZippedHashedKeys(): Promise<{ message: string; timeTaken: number }> {
+    const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const years = [2023, 2024];
+    const totalTenants = 500;
+    const totalMetrics = 400;
+    const dimensions = ['organization', 'campaign', 'platform', 'channel'];
+    const batchSize = 1000;
+    const ttlInSeconds = 3600;
+    let currentKeyCount = 0;
+
+    const startTime = Date.now();
+
+    while (currentKeyCount < 19_200_000) {
+      const pipelineCommands: Array<[string, ...any[]]> = [];
+
+      for (let i = 0; i < batchSize && currentKeyCount < 19_200_000; i++) {
+        const tenantId = Math.floor(Math.random() * totalTenants) + 1;
+        const month = months[Math.floor(Math.random() * months.length)];
+        const year = years[Math.floor(Math.random() * years.length)];
+        const metricId = Math.floor(Math.random() * totalMetrics) + 1;
+        const randomDimensions = dimensions.map(() => dimensions[Math.floor(Math.random() * dimensions.length)]);
+        const dimensionHash = this.hashDimensions(randomDimensions);
+
+        const key = `${metricId}:${tenantId}:${year}:${month}:dimHash:${dimensionHash}`;
+        const value = this.generateRandomJsonObject(currentKeyCount);
+
+        // Compress the value using gzip
+        const compressedValue = await zipAsync(Buffer.from(JSON.stringify(value)));
+
+        pipelineCommands.push(['set', key, compressedValue.toString('base64')]);
+        pipelineCommands.push(['expire', key, ttlInSeconds]);
+
+        currentKeyCount++;
+      }
+
+      await this.redisService.executePipeline(pipelineCommands);
+      console.log(`Inserted ${currentKeyCount} keys with compressed values...`);
+    }
+
+    const endTime = Date.now();
+    const timeTaken = endTime - startTime;
+
+    return {
+      message: 'Zipped bulk keys created successfully!',
+      timeTaken,
+    };
+  }
+
+  // Method to get the unzipped value based on the hashed key format
+  async getUnzippedValueHashed(metricId: number, tenantId: number, year: number, month: string, dimensions: string[]): Promise<any> {
+    const dimensionHash = this.hashDimensions(dimensions);
+    const key = `${metricId}:${tenantId}:${year}:${month}:dimHash:${dimensionHash}`;
+
+    const compressedData = await this.redisService.get(key);
+
+    if (!compressedData) {
+      throw new Error(`Key not found: ${key}`);
+    }
+    if (typeof compressedData !== 'string') {
+      throw new Error('Expected compressed data to be a string');
+    }
+
+    // Ensure that compressedData is a string before converting it to a Buffer
+    const decompressedValue = await unzipAsync(Buffer.from(String(compressedData), 'base64'));
+
+
+    return JSON.parse(decompressedValue.toString());
+  }
 }
