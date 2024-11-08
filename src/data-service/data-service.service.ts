@@ -316,6 +316,77 @@ export class DataServiceService {
     };
   }
 
+  async getKeyFromCache(key: string): Promise<any> {
+    try {
+      const value = await this.redisService.get(key);
+      return value;
+    } catch (error) {
+      console.error(`Error fetching key "${key}":`, error);
+      throw new Error('Failed to retrieve the key from cache.');
+    }
+  }
+
+  // Method to create keys in Redis with the specified format and combinations
+  async createComplexBulkKeys(): Promise<{ message: string; timeTaken: number }> {
+    const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const years = [2023, 2024];
+    const totalTenants = 500;
+    const totalMetrics = 400;
+    const dimensions = ['organization', 'campaign', 'platform', 'channel'];
+    const batchSize = 1000; // Number of keys per pipeline batch
+    const ttlInSeconds = 3600; // Set TTL for 1 hour (3600 seconds)
+    let currentKeyCount = 0;
+
+    // Record the start time
+    const startTime = Date.now();
+
+    while (currentKeyCount < 19_200_000) { // Loop until all keys are created
+      const pipelineCommands: Array<[string, ...any[]]> = [];
+
+      for (let i = 0; i < batchSize && currentKeyCount < 19_200_000; i++) {
+        // Generate random values for tenantId, month, year, metricId, and dimension
+        const tenantId = Math.floor(Math.random() * totalTenants) + 1;
+        const month = months[Math.floor(Math.random() * months.length)];
+        const year = years[Math.floor(Math.random() * years.length)];
+        const metricId = Math.floor(Math.random() * totalMetrics) + 1;
+        const dimension = dimensions[Math.floor(Math.random() * dimensions.length)];
+
+        // Construct the Redis key
+        const key = `tenant:${tenantId}:month:${month}:year:${year}:metrics:${metricId}:dimensions:[${dimension}]`;
+
+        // Generate a random JSON value for the key
+        const value = this.generateRandomJsonObject(currentKeyCount);
+
+        // Add SET command to the pipeline
+        pipelineCommands.push(['set', key, JSON.stringify(value)]);
+        // Add EXPIRE command to the pipeline for TTL
+        pipelineCommands.push(['expire', key, ttlInSeconds]);
+
+        currentKeyCount++;
+      }
+
+      try {
+        // Execute the pipeline with the batched commands
+        await this.redisService.executePipeline(pipelineCommands);
+        console.log(`Inserted ${currentKeyCount} keys so far...`);
+      } catch (error) {
+        console.error('Error executing pipeline:', error);
+        break;
+      }
+    }
+
+    // Record the end time
+    const endTime = Date.now();
+    const timeTaken = endTime - startTime;
+
+    console.log('All keys created successfully!');
+    return {
+      message: 'Complex keys created successfully with TTL!',
+      timeTaken,
+    };
+  }
+
+
   // Function to generate a random JSON object
   generateRandomJsonObject(keyIndex: number) {
     return {

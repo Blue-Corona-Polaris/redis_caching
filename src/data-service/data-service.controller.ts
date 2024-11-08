@@ -63,23 +63,50 @@ export class DataServiceController {
 
     @Get('scan-keys')
     async scanKeys(@Query('pattern') pattern: string) {
-      try {
-        // Call the service to scan keys based on the pattern
-        const keys = await this.dataService.getKeys(pattern);
-  
-        // Retrieve values for each key found
-        const result = await this.dataService.getValues(keys);
-  
-        return { keys: result }; // Return the object containing keys and values
-      } catch (error) {
-        return { message: 'Error scanning keys', error: error.message };
-      }
+        try {
+            // Call the service to scan keys based on the pattern
+            const keys = await this.dataService.getKeys(pattern);
+
+            // Retrieve values for each key found
+            const result = await this.dataService.getValues(keys);
+
+            return { keys: result }; // Return the object containing keys and values
+        } catch (error) {
+            return { message: 'Error scanning keys', error: error.message };
+        }
+    }
+
+    // Get a specific key from Redis
+    @Get('get-key')
+    async getKey(@Query('key') key: string) {
+        try {
+            if (!key) {
+                return { message: 'Key parameter is required.' };
+            }
+
+            // Call the service to get the value of the key
+            const value = await this.dataService.getKeyFromCache(key);
+
+            if (value === null) {
+                return { message: 'Key not found or expired.', key };
+            }
+
+            return { key, value };
+        } catch (error) {
+            return { message: 'Error retrieving key', error: error.message };
+        }
     }
 
     @Post('create-bulk-keys')
-    async createBulkKeys(@Body() body: { totalKeys?: number}): Promise<string> {
-        const totalKeys = body.totalKeys ?? 10_000; 
-      await this.dataService.createBulkKeysWithTTL(totalKeys);
-      return 'Bulk keys created successfully!';
+    async createBulkKeys(@Body() body: { totalKeys?: number }): Promise<string> {
+        const totalKeys = body.totalKeys ?? 10_000;
+        await this.dataService.createBulkKeysWithTTL(totalKeys);
+        return 'Bulk keys created successfully!';
+    }
+
+    @Post('create-complex-bulk-keys')
+    async createComplexBulkKeys(): Promise<string> {
+        await this.dataService.createComplexBulkKeys();
+        return 'Bulk keys created successfully!';
     }
 }
