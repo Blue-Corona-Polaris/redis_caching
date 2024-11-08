@@ -454,4 +454,77 @@ export class DataServiceService {
     }, {});
   }
 
+  // Method to create keys in Redis with a shortened format and combinations
+  async createShortenedBulkKeys(): Promise<{ message: string; timeTaken: number }> {
+    const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const years = [2023, 2024];
+    const totalTenants = 500;
+    const totalMetrics = 400;
+    const dimensions = ['organization', 'campaign', 'platform', 'channel'];
+    const batchSize = 1000; // Number of keys per pipeline batch
+    const ttlInSeconds = 3600; // Set TTL for 1 hour (3600 seconds)
+    let currentKeyCount = 0;
+
+    // Record the start time
+    const startTime = Date.now();
+
+    // Loop until all keys are created (adjusted for your expected total count)
+    while (currentKeyCount < 19_200_000) {
+      const pipelineCommands: Array<[string, ...any[]]> = [];
+
+      for (let i = 0; i < batchSize && currentKeyCount < 19_200_000; i++) {
+        // Generate random values for tenantId, month, year, metricId, and dimension
+        const tenantId = Math.floor(Math.random() * totalTenants) + 1;
+        const month = months[Math.floor(Math.random() * months.length)];
+        const year = years[Math.floor(Math.random() * years.length)];
+        const metricId = Math.floor(Math.random() * totalMetrics) + 1;
+        const dimensionCount = 4; // Since we are using 4 dimensions, we pick a random selection of 4
+        const selectedDimensions = [];
+
+        // Randomly select dimensions for this key
+        while (selectedDimensions.length < dimensionCount) {
+          const dimension = dimensions[Math.floor(Math.random() * dimensions.length)];
+          if (!selectedDimensions.includes(dimension)) {
+            selectedDimensions.push(dimension);
+          }
+        }
+
+        // Construct the Redis key using the new shortened format
+        const key = `${metricId}:${tenantId}:${year}:${month}:dimensions:[${selectedDimensions.join(',')}]`;
+
+        // Generate a random JSON value for the key
+        const value = this.generateRandomJsonObject(currentKeyCount);
+
+        // Add SET command to the pipeline
+        pipelineCommands.push(['set', key, JSON.stringify(value)]);
+        // Add EXPIRE command to the pipeline for TTL
+        pipelineCommands.push(['expire', key, ttlInSeconds]);
+
+        currentKeyCount++;
+      }
+
+      try {
+        // Execute the pipeline with the batched commands
+        await this.redisService.executePipeline(pipelineCommands);
+        console.log(`Inserted ${currentKeyCount} keys so far...`);
+      } catch (error) {
+        console.error('Error executing pipeline:', error);
+        break;
+      }
+    }
+
+    // Record the end time
+    const endTime = Date.now();
+    const timeTaken = endTime - startTime; // Calculate the time taken
+
+    console.log(`All keys created in ${timeTaken}ms!`);
+
+    // Return the response with the time taken
+    return {
+      message: 'Bulk keys created successfully with shortened format and TTL!',
+      timeTaken, // Time taken in milliseconds
+    };
+  }
+
+
 }

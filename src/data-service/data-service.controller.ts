@@ -109,4 +109,18 @@ export class DataServiceController {
         await this.dataService.createComplexBulkKeys();
         return 'Bulk keys created successfully!';
     }
+
+    // Endpoint to trigger the creation of complex bulk keys with the shortened format
+    @Post('create-shortened-bulk-keys')
+    async createShortenedBulkKeys(): Promise<string> {
+        try {
+            // Call the service to create bulk keys
+            const result = await this.dataService.createShortenedBulkKeys();
+            return `Bulk keys created successfully in ${result.timeTaken}ms!`;
+        } catch (error) {
+            console.error('Error creating keys:', error);
+            return `Error creating bulk keys: ${error.message}`;
+        }
+    }
+
 }
