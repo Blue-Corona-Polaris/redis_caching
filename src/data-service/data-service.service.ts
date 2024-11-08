@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { DataServiceTitanJobsAggregatedDaily } from './data-service.schema';
 import { RedisService } from '../redis/redis.service';
+import { createHash } from 'crypto';
 
 @Injectable()
 export class DataServiceService {
@@ -526,5 +527,74 @@ export class DataServiceService {
     };
   }
 
+
+  // Utility function to hash the dimensions array
+  private hashDimensions(dimensions: string[]): string {
+    const dimensionString = dimensions.join(',');
+    return createHash('md5').update(dimensionString).digest('hex').slice(0, 8);
+  }
+
+  // Method to create keys in Redis with the specified format and hashed dimensions
+  async createHashedBulkKeys(): Promise<{ message: string; timeTaken: number }> {
+    const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const years = [2023, 2024];
+    const totalTenants = 500;
+    const totalMetrics = 400;
+    const dimensions = ['organization', 'campaign', 'platform', 'channel'];
+    const batchSize = 1000;
+    const ttlInSeconds = 3600;
+    let currentKeyCount = 0;
+
+    // Record the start time
+    const startTime = Date.now();
+
+    while (currentKeyCount < 19_200_000) {
+      const pipelineCommands: Array<[string, ...any[]]> = [];
+
+      for (let i = 0; i < batchSize && currentKeyCount < 19_200_000; i++) {
+        const tenantId = Math.floor(Math.random() * totalTenants) + 1;
+        const month = months[Math.floor(Math.random() * months.length)];
+        const year = years[Math.floor(Math.random() * years.length)];
+        const metricId = Math.floor(Math.random() * totalMetrics) + 1;
+        const randomDimensions = dimensions.map(() => dimensions[Math.floor(Math.random() * dimensions.length)]);
+        const dimensionHash = this.hashDimensions(randomDimensions);
+
+        // Construct the key in the new format
+        const key = `${metricId}:${tenantId}:${year}:${month}:dimHash:${dimensionHash}`;
+        const value = this.generateRandomJsonObject(currentKeyCount);
+
+        // Add commands to the pipeline
+        pipelineCommands.push(['set', key, JSON.stringify(value)]);
+        pipelineCommands.push(['expire', key, ttlInSeconds]);
+
+        currentKeyCount++;
+      }
+
+      await this.redisService.executePipeline(pipelineCommands);
+      console.log(`Inserted ${currentKeyCount} keys so far...`);
+    }
+
+    const endTime = Date.now();
+    const timeTaken = endTime - startTime;
+
+    return {
+      message: 'Hashed bulk keys created successfully!',
+      timeTaken,
+    };
+  }
+
+  // Method to get the value based on hashed key format
+  async getKeyValueHashed(metricId: number, tenantId: number, year: number, month: string, dimensions: string[]): Promise<any> {
+    const dimensionHash = this.hashDimensions(dimensions);
+    const key = `${metricId}:${tenantId}:${year}:${month}:dimHash:${dimensionHash}`;
+
+    const value = await this.redisService.get(key);
+
+    if (!value) {
+      throw new Error(`Key not found: ${key}`);
+    }
+
+    return value;
+  }
 
 }

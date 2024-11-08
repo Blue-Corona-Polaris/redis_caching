@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Logger, Post, Delete, Body } from '@nestjs/common';
+import { Controller, Get, Query, Logger, Post, Delete, Body, BadRequestException } from '@nestjs/common';
 import { DataServiceService } from './data-service.service'; // Adjust path as needed
 
 @Controller('data-service')
@@ -120,6 +120,42 @@ export class DataServiceController {
         } catch (error) {
             console.error('Error creating keys:', error);
             return `Error creating bulk keys: ${error.message}`;
+        }
+    }
+
+    // API to create bulk keys with hashed dimensions
+    @Post('create-hashed-bulk-keys')
+    async createHashedBulkKeys(): Promise<{ message: string; timeTaken: number }> {
+        try {
+            return await this.dataService.createHashedBulkKeys();
+        } catch (error) {
+            throw new BadRequestException(error.message);
+        }
+    }
+
+    // API to get value based on hashed key format
+    @Get('get-key-value-hashed')
+    async getKeyValueHashed(
+        @Query('metricId') metricId: string,
+        @Query('tenantId') tenantId: string,
+        @Query('year') year: string,
+        @Query('month') month: string,
+        @Query('dimensions') dimensions: string,
+    ): Promise<{ key: string; value: any }> {
+        try {
+            const metricIdNum = parseInt(metricId, 10);
+            const tenantIdNum = parseInt(tenantId, 10);
+            const yearNum = parseInt(year, 10);
+            const dimensionArray = dimensions.split(',');
+
+            const value = await this.dataService.getKeyValueHashed(metricIdNum, tenantIdNum, yearNum, month, dimensionArray);
+
+            const dimensionHash = this.dataService.hashDimensions(dimensionArray);
+            const key = `${metricIdNum}:${tenantIdNum}:${yearNum}:${month}:dimHash:${dimensionHash}`;
+
+            return { key, value };
+        } catch (error) {
+            throw new BadRequestException(error.message);
         }
     }
 
