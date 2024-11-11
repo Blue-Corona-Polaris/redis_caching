@@ -240,7 +240,6 @@ export class MetadataService {
 
       // Helper function to create a group key
       const createGroupKey = (record: Record<string, any>, keys: string[]): string => {
-        console.time('Create Group Key');  // Start timer for creating group key
         const keyValues = keys.map((key) => {
           const value = record[key];
           if (value === undefined) {
@@ -249,8 +248,7 @@ export class MetadataService {
           }
           return value;
         });
-        console.timeEnd('Create Group Key');  // End timer for creating group key
-
+        
         return keyValues.join('|');
       };
 
