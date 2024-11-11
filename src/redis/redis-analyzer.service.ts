@@ -1,6 +1,8 @@
 // src/redis/redis-analyzer.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from './redis.service'; // Import RedisService to handle Redis operations
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class RedisAnalyzerService {
@@ -51,5 +53,56 @@ export class RedisAnalyzerService {
 
   async scanKeys(pattern: string): Promise<string[]> {
     return this.redisService.scan(pattern);
+  }
+
+  // Method to fetch all data matching a pattern and save to JSON file
+  async fetchAndSaveData(pattern: string): Promise<string> {
+    const keys = await this.redisService.scan(pattern);
+    const records: Record<string, any>[] = [];
+
+    this.logger.log(`Found ${keys.length} keys matching pattern: "${pattern}"`);
+
+    // Fetch values for each key and aggregate into records array
+    for (const key of keys) {
+      const value = await this.redisService.get(key);
+      if (value) {
+        records.push({ key, value });
+      }
+    }
+
+    // Define the file path for the JSON file
+    const filePath = path.join(__dirname, '../../output', 'redis-data.json');
+
+    // Ensure the output directory exists
+    if (!fs.existsSync(path.dirname(filePath))) {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    }
+
+    // Write the aggregated records to the JSON file
+    fs.writeFileSync(filePath, JSON.stringify(records, null, 2));
+
+    this.logger.log(`Data saved to file: ${filePath}`);
+    return filePath;
+  }
+
+  // Method to fetch all records matching the pattern
+  async fetchAllRecords(pattern: string): Promise<any[]> {
+    const keys = await this.redisService.scan(pattern);
+    if (keys.length === 0) {
+      this.logger.log(`No keys found matching pattern: ${pattern}`);
+      return [];
+    }
+
+    // Fetch values for each key
+    const records = [];
+    for (const key of keys) {
+      const value = await this.redisService.get(key);
+      if (value) {
+        records.push({ key, value });
+      }
+    }
+
+    this.logger.log(`Fetched ${records.length} records matching pattern: ${pattern}`);
+    return records;
   }
 }
