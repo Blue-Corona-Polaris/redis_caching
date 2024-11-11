@@ -210,6 +210,8 @@ export class MetadataService {
     outputFile: string,
   ): Promise<string> {
     try {
+      console.time('Total execution time');  // Start total execution timer
+
       const regeneratedDirectoryPath = path.resolve(__dirname, `../../output/regenerated`);
       const outputDirectoryPath = path.resolve(__dirname, `../../output/aggregated`);
 
@@ -222,9 +224,11 @@ export class MetadataService {
       const timestamp = new Date().toISOString();
       const outputFilePath = path.join(outputDirectoryPath, `${outputFile.replace('.json', '')}_${timestamp}.json`);
 
+      console.time('File Read Time');  // Start timer for reading files
       const regeneratedFiles = fs.readdirSync(regeneratedDirectoryPath).filter(
         (file) => file.includes(`regenerated_${pattern}`) && file.endsWith('_records.json')
       );
+      console.timeEnd('File Read Time');  // End timer for reading files
 
       if (regeneratedFiles.length === 0) {
         throw new Error(`No matching regenerated files found with pattern: regenerated_${pattern}`);
@@ -247,13 +251,18 @@ export class MetadataService {
         return keyValues.join('|');
       };
 
+      console.time('Processing Files');  // Start timer for processing files
+
       // Read and aggregate data from each regenerated file
       for (const file of regeneratedFiles) {
         const filePath = path.join(regeneratedDirectoryPath, file);
         console.log(`Processing regenerated file: ${filePath}`);
 
+        console.time(`Reading file ${file}`);  // Start timer for reading a single file
         const fileData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        console.timeEnd(`Reading file ${file}`);  // End timer for reading a single file
 
+        console.time(`Processing data in ${file}`);  // Start timer for processing the data in a file
         fileData.forEach((item: any) => {
           item.value.forEach((record: Record<string, any>) => {
             const groupKey = createGroupKey(record, groupByKeys);
@@ -277,9 +286,13 @@ export class MetadataService {
             }
           });
         });
+        console.timeEnd(`Processing data in ${file}`);  // End timer for processing the data in a file
       }
 
+      console.timeEnd('Processing Files');  // End timer for processing all files
+
       // Convert aggregated data to an array format
+      console.time('Convert Aggregated Data to Array');  // Start timer for converting to array
       const aggregatedArray = Array.from(aggregatedData.entries()).map(([groupKey, metrics]) => {
         const groupValues = groupKey.split('|');
         const aggregatedRecord: Record<string, any> = {};
@@ -296,9 +309,14 @@ export class MetadataService {
 
         return aggregatedRecord;
       });
+      console.timeEnd('Convert Aggregated Data to Array');  // End timer for converting to array
 
       // Write aggregated data to the output file with timestamp
+      console.time('Write Aggregated Data to File');  // Start timer for writing to file
       fs.writeFileSync(outputFilePath, JSON.stringify(aggregatedArray, null, 2));
+      console.timeEnd('Write Aggregated Data to File');  // End timer for writing to file
+
+      console.timeEnd('Total execution time');  // End total execution timer
       console.log(`Aggregated data saved to: ${outputFilePath}`);
 
       return `Aggregated data saved successfully to ${outputFilePath}`;
@@ -307,6 +325,5 @@ export class MetadataService {
       throw new Error(`Failed to aggregate regenerated data: ${error.message}`);
     }
   }
-
 
 }
