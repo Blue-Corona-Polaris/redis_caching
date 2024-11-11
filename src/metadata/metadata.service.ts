@@ -240,6 +240,7 @@ export class MetadataService {
 
       // Helper function to create a group key
       const createGroupKey = (record: Record<string, any>, keys: string[]): string => {
+        console.time('Create Group Key');  // Start timer for creating group key
         const keyValues = keys.map((key) => {
           const value = record[key];
           if (value === undefined) {
@@ -248,6 +249,8 @@ export class MetadataService {
           }
           return value;
         });
+        console.timeEnd('Create Group Key');  // End timer for creating group key
+
         return keyValues.join('|');
       };
 
@@ -311,6 +314,8 @@ export class MetadataService {
       });
       console.timeEnd('Convert Aggregated Data to Array');  // End timer for converting to array
 
+      console.log(`Aggregated data length: ${aggregatedArray.length}`);  // Log the length of the aggregated array
+
       // Write aggregated data to the output file with timestamp
       console.time('Write Aggregated Data to File');  // Start timer for writing to file
       fs.writeFileSync(outputFilePath, JSON.stringify(aggregatedArray, null, 2));
@@ -325,5 +330,4 @@ export class MetadataService {
       throw new Error(`Failed to aggregate regenerated data: ${error.message}`);
     }
   }
-
 }
