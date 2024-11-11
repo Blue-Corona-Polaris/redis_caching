@@ -6,32 +6,29 @@ import * as path from 'path';
 export class MetadataService {
   async generateMetadata(pattern: string, metadataFile: string): Promise<string> {
     try {
-      // Define the directory path for data files
       const directoryPath = path.resolve(__dirname, '../../dist/data');
       console.log(`Reading files from directory: ${directoryPath}`);
 
-      // Get all files in the directory
-      const files = fs.readdirSync(directoryPath);
+      // Get all files matching the pattern
+      const files = fs.readdirSync(directoryPath).filter(
+        (file) => file.includes(pattern) && file.endsWith('_records.json')
+      );
 
-      // Filter files based on the pattern (e.g., 'metric1_2023')
-      const matchingFiles = files.filter((file) => file.includes(pattern) && file.endsWith('_records.json'));
-
-      if (matchingFiles.length === 0) {
+      if (files.length === 0) {
         throw new Error(`No matching files found with pattern: ${pattern}`);
       }
 
-      console.log(`Found matching files: ${matchingFiles}`);
+      console.log(`Found matching files: ${files}`);
 
-      // Initialize metadata map and counter
+      // Metadata map and counter initialization
       const metadataMap = new Map<string, number>();
       let counter = 1;
 
-      // Iterate through each matching file and extract metadata
-      for (const file of matchingFiles) {
+      // Process each file
+      for (const file of files) {
         const filePath = path.join(directoryPath, file);
         console.log(`Processing file: ${filePath}`);
 
-        // Read and parse the JSON file
         const fileData = fs.readFileSync(filePath, 'utf8');
         const records = JSON.parse(fileData);
 
@@ -40,27 +37,43 @@ export class MetadataService {
           continue;
         }
 
-        // Extract metadata from each record
+        // Extract metadata and update keys in records
         records.forEach((item) => {
-          const key = item.key;
           item.value.forEach((record: any) => {
-            for (const [field, value] of Object.entries(record)) {
-              const metadataKey = `${field}_${value}`;
-              if (!metadataMap.has(metadataKey)) {
-                metadataMap.set(metadataKey, counter++);
+            for (const field of Object.keys(record)) {
+              // Only use the field name, not the combined key-value
+              if (!metadataMap.has(field)) {
+                metadataMap.set(field, counter++);
               }
             }
           });
         });
+
+        // Update the records using the metadata map
+        records.forEach((item) => {
+          item.value.forEach((record: any) => {
+            for (const field of Object.keys(record)) {
+              if (metadataMap.has(field)) {
+                const newKey = metadataMap.get(field)!;
+                record[newKey] = record[field];
+                delete record[field];
+              }
+            }
+          });
+        });
+
+        // Write back the updated records to the same file
+        fs.writeFileSync(filePath, JSON.stringify(records, null, 2));
+        console.log(`Updated file: ${filePath}`);
       }
 
-      // Convert the metadata map to an object
+      // Convert the metadata map to an object for output
       const metadataObject: Record<string, number> = {};
       metadataMap.forEach((value, key) => {
         metadataObject[key] = value;
       });
 
-      // Define the output file path
+      // Define the output metadata file path
       const outputFilePath = path.resolve(__dirname, `../../dist/data/${metadataFile}`);
       console.log(`Writing metadata to: ${outputFilePath}`);
 
