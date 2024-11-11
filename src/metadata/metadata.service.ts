@@ -202,6 +202,7 @@ export class MetadataService {
     }
   }
 
+  // Aggregate regenerated data based on group by keys and sum metric values
   async aggregateRegeneratedData(
     pattern: string,
     groupByKeys: string[],
@@ -218,7 +219,7 @@ export class MetadataService {
       }
 
       // Append a timestamp to the output filename
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const timestamp = new Date().toISOString();
       const outputFilePath = path.join(outputDirectoryPath, `${outputFile.replace('.json', '')}_${timestamp}.json`);
 
       const regeneratedFiles = fs.readdirSync(regeneratedDirectoryPath).filter(
@@ -257,12 +258,14 @@ export class MetadataService {
           item.value.forEach((record: Record<string, any>) => {
             const groupKey = createGroupKey(record, groupByKeys);
 
+            // Initialize aggregation for this group if not already done
             if (!aggregatedData.has(groupKey)) {
               aggregatedData.set(groupKey, {});
             }
 
             const currentAggregates = aggregatedData.get(groupKey)!;
 
+            // Sum up the metric values
             for (const metricKey of metricKeys) {
               const metricValue = parseFloat(record[metricKey]);
               if (isNaN(metricValue)) {
