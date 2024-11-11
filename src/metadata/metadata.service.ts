@@ -119,4 +119,72 @@ export class MetadataService {
       throw new Error(`Failed to transform and save data: ${error.message}`);
     }
   }
+
+   // Regenerate the original data using the transformed file and metadata
+   async regenerateOriginalData(
+    pattern: string,
+    metadataFile: string,
+    outputFolder: string,
+  ): Promise<string> {
+    try {
+      const transformedFilePath = path.resolve(__dirname, `../../output/transformed/${pattern}_records.json`);
+      const metadataFilePath = path.resolve(__dirname, `../../dist/data/${metadataFile}`);
+      const outputDirectoryPath = path.resolve(__dirname, `../../output/${outputFolder}`);
+
+      console.log(`Reading transformed file from: ${transformedFilePath}`);
+      console.log(`Reading metadata file from: ${metadataFilePath}`);
+
+      // Ensure output directory exists
+      if (!fs.existsSync(outputDirectoryPath)) {
+        fs.mkdirSync(outputDirectoryPath, { recursive: true });
+      }
+
+      // Load metadata
+      const metadata = JSON.parse(fs.readFileSync(metadataFilePath, 'utf8'));
+      const keyMetadataMap: Record<string, string> = metadata.keys;
+      const valueMetadataMap: Record<string, string> = metadata.values;
+
+      // Create reverse maps for easy lookup
+      const reverseKeyMetadataMap: Record<string, string> = Object.fromEntries(
+        Object.entries(keyMetadataMap).map(([key, value]) => [value, key])
+      );
+      const reverseValueMetadataMap: Record<string, string> = Object.fromEntries(
+        Object.entries(valueMetadataMap).map(([key, value]) => [value, key])
+      );
+
+      // Read transformed data
+      if (!fs.existsSync(transformedFilePath)) {
+        throw new Error(`Transformed file not found: ${transformedFilePath}`);
+      }
+      const transformedData = JSON.parse(fs.readFileSync(transformedFilePath, 'utf8')) as Array<any>;
+      const regeneratedRecords = [];
+
+      // Process each record in the transformed data
+      transformedData.forEach((item) => {
+        const regeneratedValue = item.value.map((record: Record<string, any>) => {
+          const regeneratedRecord: Record<string, any> = {};
+          for (const [key, value] of Object.entries(record)) {
+            // Use type assertions to ensure string type for key and value
+            const originalKey = reverseKeyMetadataMap[key as string] ?? key;
+            const originalValue = reverseValueMetadataMap[value as string] ?? value;
+            regeneratedRecord[originalKey] = originalValue;
+          }
+          return regeneratedRecord;
+        });
+
+        // Add regenerated record to the list
+        regeneratedRecords.push({ key: item.key, value: regeneratedValue });
+      });
+
+      // Save the regenerated file
+      const regeneratedFilePath = path.join(outputDirectoryPath, `regenerated_${pattern}_records.json`);
+      fs.writeFileSync(regeneratedFilePath, JSON.stringify(regeneratedRecords, null, 2));
+      console.log(`Regenerated original data saved to: ${regeneratedFilePath}`);
+
+      return `Regenerated file saved at ${regeneratedFilePath}`;
+    } catch (error) {
+      console.error('Error regenerating original data:', error.message);
+      throw new Error(`Failed to regenerate original data: ${error.message}`);
+    }
+  }
 }
