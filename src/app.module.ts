@@ -7,6 +7,7 @@ import { SummaryModule } from './summary/summary.module';
 // import { redisStore } from 'cache-manager-redis-yet';
 import { RedisModule } from './redis/redis.module';
 import { DataServiceModule } from './data-service/data-service.module';
+import { PandasUtilModule } from './pandas_util/pandasutil.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { DataServiceModule } from './data-service/data-service.module';
     SummaryModule,
     RedisModule,
     DataServiceModule, 
+    PandasUtilModule
     // CacheModule.register({
     //   store: redisStore,
     //   url: 'redis://127.0.0.1:6379', // Check if this is the correct Redis URL
