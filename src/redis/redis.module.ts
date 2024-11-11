@@ -1,9 +1,9 @@
 // src/redis/redis.module.ts
 import { Module, Global } from '@nestjs/common';
 import { RedisService } from './redis.service';
-import { RedisAnalyzerService } from './redis-analyzer.service'; // If you need it
-import { RedisAnalyzeController } from './redis-analyze.controller'; // If you need it
 import { Redis } from 'ioredis';
+import { RedisGenerateService } from './redis-generate.service';
+import { RedisGenerateController } from './redis-generate.controller';
 
 @Global() // Make Redis globally available in the application
 @Module({
@@ -20,10 +20,10 @@ import { Redis } from 'ioredis';
       },
     },
     RedisService, // Adding RedisService to the providers
-    RedisAnalyzerService, // Adding RedisAnalyzerService to the providers
+    RedisGenerateService
   ],
-  controllers: [RedisAnalyzeController], // If you need to add the controller to the module
-  exports: [RedisService, RedisAnalyzerService], // Make services available for other modules
+  controllers: [RedisGenerateController], // If you need to add the controller to the module
+  exports: [RedisService, RedisGenerateService], // Make services available for other modules
 })
 export class RedisModule {}
 
