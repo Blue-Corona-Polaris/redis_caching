@@ -51,7 +51,7 @@ export class MetadataController {
       const metricKeysArray = metricKeys.split(',');
 
       // Call the service method to aggregate the data
-      const result = await this.metadataService.aggregateRegeneratedData(
+      const result = await this.metadataService.aggregateRegeneratedDataInParallel(
         pattern,
         groupByKeysArray,
         metricKeysArray,
