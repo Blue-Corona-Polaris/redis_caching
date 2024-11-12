@@ -7,7 +7,7 @@ export class DataGenerationController {
 
   @Get('generate')
   generateData() {
-    const data = this.dataGenerationService.generateData();
+    const data = this.dataGenerationService.generateFullData();
     return {
       message: 'Data generated successfully',
       totalRecords: data.length,
