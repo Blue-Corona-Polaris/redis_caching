@@ -10,6 +10,7 @@ import { DataServiceModule } from './data-service/data-service.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { PandasUtilModule } from './pandas_util/pandasutil.module';
 import { MetadataModule } from './metadata/metadata.module';
+import { DataGenerationModule } from './data-generation/data-generation.module';
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { MetadataModule } from './metadata/metadata.module';
     DataServiceModule, 
     MetricsModule,
     PandasUtilModule,
-    MetadataModule
+    MetadataModule,
+    DataGenerationModule
     // CacheModule.register({
     //   store: redisStore,
     //   url: 'redis://127.0.0.1:6379', // Check if this is the correct Redis URL
