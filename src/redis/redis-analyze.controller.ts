@@ -164,9 +164,8 @@ async fetchAndSaveZip(@Query('pattern') pattern: string, @Res() res: Response) {
     const jsonData = JSON.stringify(records, null, 2);
 
     // Define the JSON file path and the ZIP file path     
-    const jsonFilePath = path.join(__dirname, '..', 'data', `${pattern}_records.json`);
-    const zipFilePath = path.join(__dirname, '..', 'data', `${pattern}_records.zip`);
-
+    const jsonFilePath = path.join(__dirname, '../../output/', 'data', `${pattern}_records.json`);
+    const zipFilePath = path.join(__dirname, '../../output/', 'data', `${pattern}_records.zip`);
     // Ensure the directory exists for both JSON and ZIP files
     fs.mkdirSync(path.dirname(jsonFilePath), { recursive: true });
 
