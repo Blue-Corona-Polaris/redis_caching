@@ -6,13 +6,10 @@ export class DataGenerationController {
   constructor(private readonly dataGenerationService: DataGenerationService) {}
 
   @Get('generate')
-  generateData() {
-    const data = this.dataGenerationService.generateFullData();
+  async generateAndCacheData() {
+    await this.dataGenerationService.generateAndCacheAllMetrics();
     return {
-      message: 'Data generated successfully',
-      totalRecords: data.length,
-      metricsProcessed: this.dataGenerationService['metrics'].length,
-      sampleData: data.slice(0, 5), // Return a sample of the data
+      message: 'Data generation and caching started.',
     };
   }
 }
