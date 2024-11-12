@@ -7,6 +7,7 @@ import { SummaryModule } from './summary/summary.module';
 // import { redisStore } from 'cache-manager-redis-yet';
 import { RedisModule } from './redis/redis.module';
 import { DataServiceModule } from './data-service/data-service.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { PandasUtilModule } from './pandas_util/pandasutil.module';
 import { MetadataModule } from './metadata/metadata.module';
 
@@ -16,6 +17,7 @@ import { MetadataModule } from './metadata/metadata.module';
     SummaryModule,
     RedisModule,
     DataServiceModule, 
+    MetricsModule,
     PandasUtilModule,
     MetadataModule
     // CacheModule.register({
