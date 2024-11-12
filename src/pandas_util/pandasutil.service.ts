@@ -169,7 +169,7 @@ export class PandasUtilService {
     console.timeEnd('Data Frame Creation');
 
     // Log the DataFrame columns for debugging
-    console.log('DataFrame Columns:', df.columns); // Check the columns here
+    console.log('DataFrame Columns:', df.columns); // Access columns directly, not a function
 
     console.time('Metric Conversion');
     // Convert metric columns to numeric values if they exist
@@ -183,48 +183,54 @@ export class PandasUtilService {
     console.timeEnd('Metric Conversion');
 
     console.time('Grouping and Aggregation');
-    // Manual groupby and aggregation using JavaScript
-    const groupedData: { [key: string]: any[] } = {};
+    // Manually group data based on the groupByKeys
+    const groupedData: Record<string, any> = {};
 
-    // Group the data by groupByKeys
-    allData.forEach((item) => {
-      const groupKey = groupByKeys.map((key) => item[key]).join('_'); // Use groupByKeys to create a unique key
+    allData.forEach((row: any) => {
+      // Create a key from groupByKeys
+      const groupKey = groupByKeys.map((key) => row[key]).join('_');
+
       if (!groupedData[groupKey]) {
-        groupedData[groupKey] = [];
+        groupedData[groupKey] = { ...row }; // Start with the first row as the base
+        groupByKeys.forEach((key) => delete groupedData[groupKey][key]); // Remove groupByKeys from aggregation
+        metricKeys.forEach((metric) => (groupedData[groupKey][metric] = 0)); // Initialize metrics
       }
-      groupedData[groupKey].push(item);
+
+      // Aggregate the metrics
+      metricKeys.forEach((metric) => {
+        if (row.hasOwnProperty(metric)) {
+          groupedData[groupKey][metric] += parseFloat(row[metric]) || 0;
+        }
+      });
     });
 
-    // Aggregating the metrics for each group
-    const aggregatedResult: any[] = [];
-    for (const groupKey in groupedData) {
-      if (groupedData.hasOwnProperty(groupKey)) {
-        const group = groupedData[groupKey];
-        const groupResult: any = {};
-
-        // Set groupBy keys (first item in the group should suffice)
-        groupByKeys.forEach((key, index) => {
-          groupResult[key] = group[0][key];
-        });
-
-        // Sum the metric values for the group
-        metricKeys.forEach((metric) => {
-          const metricSum = group.reduce((sum, item) => sum + (parseFloat(item[metric]) || 0), 0);
-          groupResult[metric] = metricSum;
-        });
-
-        aggregatedResult.push(groupResult);
-      }
-    }
+    // Convert groupedData into an array of aggregated results
+    const aggregatedResult = Object.values(groupedData);
     console.timeEnd('Grouping and Aggregation');
 
     console.time('Saving Result');
-    // Save the aggregated result to a file
-    const outputFilePath = path.join(directoryPath, outputFile);
+    // Add timestamp to the aggregated result
+    const timestamp = new Date().toISOString().replace('T', ' ').split('.')[0];
+
+    // Create the 'aggregated' folder if it doesn't exist
+    const output = path.join(__dirname, '../../output');
+    const aggregatedFolderPath = path.join(output, 'aggregated_pandas');
+    if (!fs.existsSync(aggregatedFolderPath)) {
+      fs.mkdirSync(aggregatedFolderPath);
+    }
+
+    // Create the output file path with timestamp
+    const outputFilePath = path.join(
+      aggregatedFolderPath,
+      `aggregated_result_${timestamp}.json`
+    );
+
+    // Save the result to the file
     fs.writeFileSync(outputFilePath, JSON.stringify(aggregatedResult, null, 2), 'utf-8');
     console.timeEnd('Saving Result');
 
     console.timeEnd('Total Time');
-    return `Aggregated data saved to ${outputFile}`;
+    return `Aggregated data saved to ${outputFilePath}`;
   }
+
 }
