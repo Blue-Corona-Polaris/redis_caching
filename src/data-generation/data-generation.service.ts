@@ -24,7 +24,6 @@ export class DataGenerationService {
         const fileKey = path.basename(file, '.json'); // Use filename without extension as key
         const fileData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
-        // Extract keys from the JSON array objects and map them
         if (Array.isArray(fileData) && fileData.length > 0) {
           data[fileKey] = {};
           const keys = Object.keys(fileData[0]);
@@ -45,27 +44,22 @@ export class DataGenerationService {
       for (const month of this.months) {
         const dataset = [];
 
-        // Generate 100,000 records for the given metric, year, and month
         for (let i = 0; i < 100000; i++) {
           const record: any = {
             year,
             month,
           };
 
-          // Dynamically add fields based on the keys from inputData
           for (const [fileKey, fields] of Object.entries(inputData)) {
             for (const [fieldKey, values] of Object.entries(fields)) {
               record[fieldKey] = values[Math.floor(Math.random() * values.length)] || `Unknown ${fieldKey}`;
             }
           }
 
-          // Add the current metric as a key with a random value
           record[metric] = Math.floor(Math.random() * 1000);
-
           dataset.push(record);
         }
 
-        // Construct the key and store in Redis
         const cacheKey = `${metric}_${year}_${month}`;
         await this.redisService.set(cacheKey, dataset, this.ttl);
         console.log(`Stored dataset in Redis with key: ${cacheKey}`);
@@ -82,5 +76,22 @@ export class DataGenerationService {
     }
 
     console.log('Data generation and caching complete.');
+  }
+
+  // Fetch data from Redis based on metricId, year, and month
+  public async getDataFromCache(metricId: string, year: number, month: string) {
+    const cacheKey = `${metricId}_${year}_${month}`;
+    const data = await this.redisService.get(cacheKey);
+
+    if (data) {
+      return {
+        key: cacheKey,
+        data,
+      };
+    } else {
+      return {
+        message: `No data found for key: ${cacheKey}`,
+      };
+    }
   }
 }
