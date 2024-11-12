@@ -1,6 +1,9 @@
+import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { DataFrame } from 'pandas-js';
 
+@Injectable()
 export class PandasUtilService {
 
   // Method to group by specified keys and sum the metric values
@@ -95,12 +98,12 @@ export class PandasUtilService {
       console.log(`Total JSON parse time: ${parseTime.toFixed(2)} ms`);
       console.log(`Total records: ${groupedResults.length}`);
 
-      return { 
-        result: groupedResults, 
-        totalTime, 
-        processingTime, 
-        fileReadTime: fileReadTime.toFixed(2), 
-        parseTime: parseTime.toFixed(2) 
+      return {
+        result: groupedResults,
+        totalTime,
+        processingTime,
+        fileReadTime: fileReadTime.toFixed(2),
+        parseTime: parseTime.toFixed(2)
       }; // Return time details along with the result
     } catch (error) {
       console.error('Error grouping and summing metrics with pandas:', error);
@@ -125,5 +128,103 @@ export class PandasUtilService {
     return files
       .filter((file) => file.includes(pattern) && file.endsWith('.json')) // Match files based on pattern and ensure it's a JSON file
       .map((file) => path.join(directoryPath, file)); // Return full file path
+  }
+
+  async aggregateData(payload: any): Promise<string> {
+    console.time('Total Time');
+    const directoryPath = path.join(__dirname, '../../output/regenerated');
+    const { pattern, groupByKeys, metricKeys, outputFile } = payload;
+
+    console.time('File Matching');
+    // Get all files matching the pattern
+    const files = fs.readdirSync(directoryPath);
+    const matchedFiles = files.filter((file) =>
+      pattern.some((p: string) => file.includes(p))
+    );
+    console.timeEnd('File Matching');
+
+    let allData: any[] = [];
+
+    console.time('File Reading and Parsing');
+    // Read and parse each matching file
+    for (const file of matchedFiles) {
+      const filePath = path.join(directoryPath, file);
+      const fileContent = fs.readFileSync(filePath, 'utf-8');
+      const jsonData = JSON.parse(fileContent);
+
+      // Extract the 'value' array from each JSON entry and combine into one dataset
+      jsonData.forEach((record: any) => {
+        allData = allData.concat(record.value);
+      });
+    }
+    console.timeEnd('File Reading and Parsing');
+
+    if (allData.length === 0) {
+      throw new Error('No data found matching the specified patterns.');
+    }
+
+    console.time('Data Frame Creation');
+    // Create a DataFrame from the extracted data
+    const df = new DataFrame(allData);
+    console.timeEnd('Data Frame Creation');
+
+    // Log the DataFrame columns for debugging
+    console.log('DataFrame Columns:', df.columns); // Check the columns here
+
+    console.time('Metric Conversion');
+    // Convert metric columns to numeric values if they exist
+    metricKeys.forEach((metric) => {
+      if (df.hasOwnProperty(metric)) {
+        df[metric] = df[metric].apply((value: any) => parseFloat(value) || 0);
+      } else {
+        console.warn(`Column '${metric}' not found in DataFrame.`);
+      }
+    });
+    console.timeEnd('Metric Conversion');
+
+    console.time('Grouping and Aggregation');
+    // Manual groupby and aggregation using JavaScript
+    const groupedData: { [key: string]: any[] } = {};
+
+    // Group the data by groupByKeys
+    allData.forEach((item) => {
+      const groupKey = groupByKeys.map((key) => item[key]).join('_'); // Use groupByKeys to create a unique key
+      if (!groupedData[groupKey]) {
+        groupedData[groupKey] = [];
+      }
+      groupedData[groupKey].push(item);
+    });
+
+    // Aggregating the metrics for each group
+    const aggregatedResult: any[] = [];
+    for (const groupKey in groupedData) {
+      if (groupedData.hasOwnProperty(groupKey)) {
+        const group = groupedData[groupKey];
+        const groupResult: any = {};
+
+        // Set groupBy keys (first item in the group should suffice)
+        groupByKeys.forEach((key, index) => {
+          groupResult[key] = group[0][key];
+        });
+
+        // Sum the metric values for the group
+        metricKeys.forEach((metric) => {
+          const metricSum = group.reduce((sum, item) => sum + (parseFloat(item[metric]) || 0), 0);
+          groupResult[metric] = metricSum;
+        });
+
+        aggregatedResult.push(groupResult);
+      }
+    }
+    console.timeEnd('Grouping and Aggregation');
+
+    console.time('Saving Result');
+    // Save the aggregated result to a file
+    const outputFilePath = path.join(directoryPath, outputFile);
+    fs.writeFileSync(outputFilePath, JSON.stringify(aggregatedResult, null, 2), 'utf-8');
+    console.timeEnd('Saving Result');
+
+    console.timeEnd('Total Time');
+    return `Aggregated data saved to ${outputFile}`;
   }
 }

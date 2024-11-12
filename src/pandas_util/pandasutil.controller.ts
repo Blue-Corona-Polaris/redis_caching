@@ -22,4 +22,9 @@ export class PandasUtilController {
       };
     }
   }
+
+  @Post('aggregate')
+  async aggregateData(@Body() payload: any): Promise<string> {
+    return this.pandasUtilService.aggregateData(payload);
+  }
 }
