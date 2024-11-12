@@ -13,7 +13,7 @@ export class MetadataService {
   // Generate metadata without modifying original files
   async generateMetadata(pattern: string, metadataFile: string): Promise<string> {
     try {
-      const directoryPath = path.resolve(__dirname, '../../dist/data');
+      const directoryPath = path.resolve(__dirname, '../../output/data');
       const metadataFilePath = path.join(directoryPath, metadataFile);
 
       const keyMetadataMap = new Map<string, number>();
@@ -72,7 +72,7 @@ export class MetadataService {
   // Transform data using metadata without modifying original files
   async transformAndSaveData(inputPattern: string, metadataFile: string, outputFolder: string): Promise<string> {
     try {
-      const dataDirectoryPath = path.resolve(__dirname, '../../dist/data');
+      const dataDirectoryPath = path.resolve(__dirname, '../../output/data');
       const metadataFilePath = path.join(dataDirectoryPath, metadataFile);
       const outputDirectoryPath = path.resolve(__dirname, `../../output/${outputFolder}`);
 
@@ -134,7 +134,7 @@ export class MetadataService {
   ): Promise<string> {
     try {
       const transformedDirectoryPath = path.resolve(__dirname, `../../output/transformed`);
-      const metadataFilePath = path.resolve(__dirname, `../../dist/data/${metadataFile}`);
+      const metadataFilePath = path.resolve(__dirname, `../../output/data/${metadataFile}`);
       const outputDirectoryPath = path.resolve(__dirname, `../../output/${outputFolder}`);
 
       console.log(`Reading metadata file from: ${metadataFilePath}`);
