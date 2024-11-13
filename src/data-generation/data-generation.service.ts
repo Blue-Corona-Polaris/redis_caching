@@ -342,4 +342,63 @@ export class DataGenerationService {
       count: result.length,
     };
   }
+
+   // Method to handle multiple metrics
+   async getMultipleMetricsData(
+    metricIds: string[],
+    year: number,
+    month: string,
+    groupBy: string
+  ): Promise<any> {
+    // Build the keys for Redis (metricId_year_month)
+    const keys = metricIds.map((metricId) => `${metricId}_${year}_${month}`);
+    this.logger.log(`Fetching data for keys: ${keys.join(', ')}`);
+
+    // Fetch data for all keys using mget from Redis
+    const dataList = await this.redisService.mget(keys);
+    const groupedResults = [];
+
+    // Process the data for each metricId
+    for (let i = 0; i < dataList.length; i++) {
+      const data = dataList[i];
+      const metricId = metricIds[i];
+
+      if (!data) {
+        this.logger.warn(`No data found for key: ${keys[i]}`);
+        continue;
+      }
+
+      // Cast the `data` to an array, assuming it is an array of objects
+      const dataArray = data as Array<{ [key: string]: any }>;
+
+      // Split the groupBy parameter into an array of fields
+      const groupByFields = groupBy.split(',').map((field) => field.trim());
+      const resultMap = new Map();
+
+      // Iterate over the data and group it based on groupBy fields
+      dataArray.forEach((item) => {
+        const groupKey = groupByFields
+          .map((field) => item[field] ?? `Unknown ${field}`)
+          .join('|');
+        if (!resultMap.has(groupKey)) {
+          resultMap.set(groupKey, {
+            metricId,
+            year,
+            month,
+            ...Object.fromEntries(groupByFields.map((field) => [field, item[field] ?? `Unknown ${field}`])),
+          });
+        }
+      });
+
+      // Add the grouped results to the final output
+      groupedResults.push(...Array.from(resultMap.values()));
+    }
+
+    return {
+      keys,
+      groupedBy: groupBy.split(','),
+      result: groupedResults,
+      count: groupedResults.length,
+    };
+  }
 }

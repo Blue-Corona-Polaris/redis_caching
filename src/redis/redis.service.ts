@@ -8,8 +8,12 @@ export class RedisService {
   private redisClient: Redis.Redis;
 
   constructor() {
-    // Initialize Redis client
-    this.redisClient = new Redis.Redis(); // Use your Redis configuration here
+    // In RedisService, use a singleton pattern
+    this.redisClient = new Redis.Redis({
+      host: 'localhost',
+      port: 6379,
+      lazyConnect: true,
+    });
   }
 
   // Get value by key
@@ -18,6 +22,23 @@ export class RedisService {
     return data ? JSON.parse(data) : null;
   }
 
+   // Get multiple values by keys using MGET
+   async mget<T>(keys: string[]): Promise<(T | null)[]> {
+    if (keys.length === 0) {
+      this.logger.log('No keys provided for mget.');
+      return [];
+    }
+
+    try {
+      const data = await this.redisClient.mget(...keys);
+      this.logger.log(`Retrieved ${keys.length} keys using mget.`);
+      return data.map((item) => (item ? JSON.parse(item) : null));
+    } catch (error) {
+      this.logger.error(`Error during mget: ${error.message}`);
+      throw error;
+    }
+  }
+  
   // Set value by key with TTL
   async set(key: string, value: any, ttl: number): Promise<void> {
     await this.redisClient.set(key, JSON.stringify(value), 'EX', ttl);
@@ -72,7 +93,7 @@ export class RedisService {
 
     return keys; // Return the found keys
   }
-  
+
   // Method to delete keys by pattern
   async deleteByPattern(pattern: string): Promise<number> {
     const keysToDelete = await this.scan(pattern);
