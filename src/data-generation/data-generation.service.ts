@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { RedisService } from '../redis/redis.service';
+import { from } from 'rxjs';
+import { mergeMap, toArray } from 'rxjs/operators';
 
 @Injectable()
 export class DataGenerationService {
@@ -537,26 +539,21 @@ export class DataGenerationService {
     months: string[],
     groupBy: string[]
   ) {
-    console.time('Total Execution Time'); // Track the total execution time
+    console.time('Total Execution Time');
 
     console.time('Key Generation Time');
-    // Generate all possible combinations of metricIds, years, months
     const keys = this.generateKeys(metricIds, years, months);
     console.timeEnd('Key Generation Time');
 
-    console.log('Generated Keys:', keys);
-
-    console.time('Data Fetching from Cache'); // Track the cache fetching time
-    // Fetch data from Redis in bulk using mget
+    console.time('Data Fetching from Cache');
     const dataList: (string | null)[] = await this.redisService.mget(keys);
-    console.timeEnd('Data Fetching from Cache'); // End cache fetching time
+    console.timeEnd('Data Fetching from Cache');
 
-    console.time('Data Processing Time'); // Track data processing time
-    // Process the data to group it based on groupBy fields
-    const groupedData = this.processData(dataList, keys, groupBy);
-    console.timeEnd('Data Processing Time'); // End data processing time
+    console.time('Data Processing Time');
+    const groupedData = await this.processDataParallel(dataList, keys, groupBy);
+    console.timeEnd('Data Processing Time');
 
-    console.timeEnd('Total Execution Time'); // End the total execution time
+    console.timeEnd('Total Execution Time');
 
     return groupedData;
   }
@@ -576,80 +573,72 @@ export class DataGenerationService {
     return keys;
   }
 
-  // Process the data by grouping it based on metricId, year, month, and groupBy fields
-  private processData(
+  // Process the data in parallel using RxJS
+  private processDataParallel(
     dataList: (string | null)[],
     keys: string[],
     groupBy: string[]
-  ): any[] {
+  ): Promise<any[]> {
     console.time('Initialization Time');
-    const groupedResults: any[] = [];
-    const resultMap = new Map<string, any>(); // Use a Map for faster lookups
+    const resultMap = new Map<string, any>();
     console.timeEnd('Initialization Time');
 
-    console.time('DataList Loop Time'); // Track time for looping through dataList
-    // Loop through dataList and process each entry
-    dataList.forEach((data: any, index) => {
-      if (data) {
+    console.time('DataList Processing with RxJS');
+
+    // Use RxJS `from` to create an observable stream from dataList
+    return from(dataList).pipe(
+      mergeMap((data, index) => {
+        if (!data) return []; // Skip if data is null
+
         try {
-          console.time('Data Array Loop Time');
-          const dataArray = data; // Assume data is already an array of objects
+          console.time(`Data Array Processing Time [${index}]`);
+          const dataArray:any = data; // Assume data is already an array of objects
 
-          // Loop through each object in the dataArray
           dataArray.forEach((obj) => {
-            // Extract metricId, year, and month from the Redis key
             const [metricId, year, month] = keys[index].split('_');
-
-            // Create a comprehensive group key using metricId, year, month, and all groupBy fields
             const groupKey = [
               metricId,
               year,
               month,
               ...groupBy.map((field) => obj[field] || 'Unknown')
             ].join('|');
-            
-            // Check if an existing entry with the same group key exists using the Map
+
             let existingEntry = resultMap.get(groupKey);
-            
+
             if (existingEntry) {
-              // If an existing entry is found, update it (custom merging logic can be applied here)
               groupBy.forEach((field) => {
                 existingEntry[field] = obj[field] || existingEntry[field];
               });
             } else {
-              // Create a new entry if none exists
               const resultObject = {
                 metricId,
                 year: parseInt(year, 10),
                 month,
               };
-
-              // Add all groupBy fields to the result object
               groupBy.forEach((field) => {
                 resultObject[field] = obj[field] || 'Unknown';
               });
 
-              // Store the entry in the Map and add to groupedResults
               resultMap.set(groupKey, resultObject);
-              groupedResults.push(resultObject);
             }
           });
-          console.timeEnd('Data Array Loop Time');
+
+          console.timeEnd(`Data Array Processing Time [${index}]`);
         } catch (error) {
-          console.timeEnd('Data Array Loop Time');
           this.logger.error(`Error processing data at index ${index}: ${error.message}`);
         }
-      }
+
+        return [];
+      }, 10), // Concurrency level of 10 (adjust as needed)
+      toArray()
+    ).toPromise().then(() => {
+      console.time('Result Mapping Time');
+      const resultArray = Array.from(resultMap.values());
+      console.timeEnd('Result Mapping Time');
+
+      console.timeEnd('DataList Processing with RxJS');
+      return resultArray;
     });
-    console.timeEnd('DataList Loop Time');
-
-    console.time('Result Mapping Time');
-    // Return only the result array
-    const resultArray = groupedResults.map(({ groupKey, ...rest }) => rest);
-    console.timeEnd('Result Mapping Time');
-
-    return resultArray;
   }
-
 
 }
