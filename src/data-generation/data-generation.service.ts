@@ -466,7 +466,7 @@ export class DataGenerationService {
     };
   }
 
-  async getMultipleMetricsGroupedData(
+  async getMultipleMetricsGroupedDataSeparateCacheCall(
     metricIds: string[],
     year: number,
     month: string,
@@ -529,4 +529,5 @@ export class DataGenerationService {
       count: groupedResults.length,
     };
   }
+
 }

@@ -85,7 +85,7 @@ export class DataGenerationController {
     console.time('Total Data Fetch Time'); // Measure the time taken to fetch all data
     for (const combination of combinations) {
       const { year, month, groupByFields } = combination;
-      const result = await this.dataGenerationService.getMultipleMetricsGroupedData(
+      const result = await this.dataGenerationService.getMultipleMetricsGroupedDataSeparateCacheCall(
         metricIds, year, month, groupByFields.join(',')
       );
       allResults.push(result);
@@ -113,4 +113,6 @@ export class DataGenerationController {
     }
     return combinations;
   }
+
+  
 }
