@@ -95,8 +95,8 @@ export class DataGenerationService {
     }
   }
 
-  // Method to fetch and group data based on groupBy fields
-  public async getDataGroupedBy(metricId: string, year: number, month: string, groupBy: string) {
+  // Method to fetch and group data based on groupBy fields get all
+  public async getDataGroupedByAll(metricId: string, year: number, month: string, groupBy: string) {
     const cacheKey = `${metricId}_${year}_${month}`;
     const data = await this.redisService.get<Record<string, any>[]>(cacheKey);
 
@@ -139,6 +139,76 @@ export class DataGenerationService {
       count: items.length,
       items,
     }));
+
+    return {
+      key: cacheKey,
+      groupedBy: groupByFields,
+      result,
+    };
+  }
+
+  // Method to fetch and group data based on groupBy fields
+  public async getDataGroupedBy(metricId: string, year: number, month: string, groupBy: string) {
+    const cacheKey = `${metricId}_${year}_${month}`;
+    const data = await this.redisService.get<Record<string, any>[]>(cacheKey);
+
+    // Ensure data is an array and not empty
+    if (!Array.isArray(data) || data.length === 0) {
+      return {
+        message: `No data found for key: ${cacheKey}`,
+      };
+    }
+
+    // Split the groupBy parameter into an array of fields
+    const groupByFields = groupBy.split(',').map((field) => field.trim());
+
+    // Validate that groupByFields are provided
+    if (groupByFields.length === 0) {
+      return {
+        message: 'No valid groupBy fields provided.',
+      };
+    }
+
+    // Group the data manually using plain JavaScript
+    const groupedData: Record<string, any[]> = {};
+
+    for (const item of data) {
+      // Construct the group key using the specified fields
+      const groupKey = groupByFields.map((field) => (field in item ? item[field] : `Unknown ${field}`)).join('|');
+
+      // Initialize the group if it does not exist
+      if (!groupedData[groupKey]) {
+        groupedData[groupKey] = [];
+      }
+
+      // Add the current item to the group
+      groupedData[groupKey].push(item);
+    }
+
+    // Format the response to include only groupBy fields, metricId, year, and month
+    const result = Object.entries(groupedData).map(([group, items]) => {
+      // Extract only the required fields for each item
+      const formattedItems = items.map((item) => {
+        const filteredItem: Record<string, any> = {
+          metricId,
+          year,
+          month,
+        };
+
+        // Include only the fields specified in groupBy
+        groupByFields.forEach((field) => {
+          filteredItem[field] = item[field] ?? `Unknown ${field}`;
+        });
+
+        return filteredItem;
+      });
+
+      return {
+        group,
+        count: items.length,
+        items: formattedItems,
+      };
+    });
 
     return {
       key: cacheKey,
