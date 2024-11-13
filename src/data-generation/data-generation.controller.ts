@@ -20,4 +20,11 @@ export class DataGenerationController {
     const { metricId, year, month } = payload;
     return await this.dataGenerationService.getDataFromCache(metricId, year, month);
   }
+
+    // API to get grouped data by metricId, year, month, and groupBy fields
+    @Post('group-data')
+    async getGroupedData(@Body() payload: { metricId: string; year: number; month: string; groupBy: string }) {
+      const { metricId, year, month, groupBy } = payload;
+      return await this.dataGenerationService.getDataGroupedBy(metricId, year, month, groupBy);
+    }
 }
