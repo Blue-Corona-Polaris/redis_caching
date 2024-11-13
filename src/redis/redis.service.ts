@@ -145,4 +145,42 @@ export class RedisService {
     const ttl = await this.redisClient.ttl(key);
     return ttl;
   }
+
+  // Method to check if a single key exists in Redis
+  async exists(key: string): Promise<boolean> {
+    try {
+      const result = await this.redisClient.exists(key);
+      return result === 1;  // Redis returns 1 if the key exists, 0 if it does not
+    } catch (error) {
+      this.logger.error(`Error checking if key exists: ${key}`, error.stack);
+      return false;
+    }
+  }
+
+  // Method to check if multiple keys exist in Redis using pipeline
+async existsMultiple(keys: string[]): Promise<boolean[]> {
+  try {
+    const pipeline = this.redisClient.pipeline();
+
+    // Queue an EXISTS command for each key
+    keys.forEach((key) => pipeline.exists(key));
+
+    // Execute the pipeline
+    const results = await pipeline.exec();
+
+    // Map the results to boolean values (1 means exists, 0 means does not exist)
+    return results.map(([error, result]) => {
+      if (error) {
+        this.logger.error(`Error checking existence for key: ${error.message}`);
+        return false;
+      }
+      return result === 1;
+    });
+  } catch (error) {
+    this.logger.error(`Error in existsMultiple`, error.stack);
+    return keys.map(() => false);
+  }
+}
+
+
 }

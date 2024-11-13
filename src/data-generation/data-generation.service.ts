@@ -63,7 +63,7 @@ export class DataGenerationService {
       for (const month of this.months) {
         const dataset = [];
 
-        for (let i = 0; i < 100000; i++) {
+        for (let i = 0; i < 10000; i++) {
           const record: any = {
             year,
             month,
@@ -550,7 +550,7 @@ export class DataGenerationService {
     };
   }
 
-  async getMultipleMetricsDataSingleCall(
+  async getMultipleMetricsDataSingleCallOld(
     metricIds: string[],
     years: number[],
     months: string[],
@@ -580,8 +580,48 @@ export class DataGenerationService {
     return groupedData;
   }
 
-   // Decompress the fetched data from Redis
-   private async decompressDataList(dataList: (string | null)[]): Promise<any[]> {
+  // Method to handle the complete flow for generating and fetching data
+  public async getMultipleMetricsDataSingleCall(
+    metricIds: string[],
+    years: number[],
+    months: string[],
+    groupBy: string[]
+  ): Promise<any[]> {
+    console.time('Total Execution Time');  // Start the total execution timer
+
+    console.time('Key Generation Time');
+    const keys = this.generateKeys(metricIds, years, months);  // Generate keys for Redis
+    console.timeEnd('Key Generation Time');
+
+    // Step 1: Check if all keys exist in Redis
+    console.time('Check Keys Existence');
+    const existenceCheck = await this.redisService.existsMultiple(keys);  // Check existence of keys
+    console.timeEnd('Check Keys Existence');
+
+    // Step 2: Identify missing keys and handle accordingly
+    const missingKeys = keys.filter((key, index) => !existenceCheck[index]);
+    if (missingKeys.length > 0) {
+      this.logger.warn(`Missing keys in Redis: ${missingKeys.join(', ')}`);
+    }
+
+    // Step 3: Fetch data from Redis (only for existing keys)
+    console.time('Data Fetching from Cache');
+    const existingKeys = keys.filter((key, index) => existenceCheck[index]);  // Only fetch for existing keys
+    const dataList = await this.fetchDataInParallel(existingKeys, 100);  // Fetch data for existing keys
+    console.timeEnd('Data Fetching from Cache');
+
+    // Step 4: Process data (grouping based on groupBy)
+    console.time('Data Processing Time');
+    const groupedData = this.processDataParallel(dataList, existingKeys, groupBy);  // Process the decompressed data
+    console.timeEnd('Data Processing Time');
+
+    console.timeEnd('Total Execution Time');  // End the total execution timer
+
+    return groupedData;  // Return the grouped data
+  }
+
+  // Decompress the fetched data from Redis
+  private async decompressDataList(dataList: (string | null)[]): Promise<any[]> {
     const decompressedDataPromises = dataList.map((data) => {
       if (data) {
         return new Promise<any>((resolve, reject) => {
@@ -689,5 +729,51 @@ export class DataGenerationService {
     ).toPromise().then(() => Array.from(resultMap.values()));
   }
 
+  async fetchMetricsDataWithCombinations(
+    metricIds: string[],
+    years: number[],
+    months: string[],
+    groupBy: string[]
+  ) {
+    console.time('Total Execution Time');
+
+    console.time('Key Generation Time');
+    const keys = this.generateKeys(metricIds, years, months);
+    console.timeEnd('Key Generation Time');
+
+    console.time('Data Fetching from Cache with Parallelism');
+    const dataList = await this.fetchDataInParallelGet(keys); // Fetch data in parallel
+    console.timeEnd('Data Fetching from Cache with Parallelism');
+
+    console.time('Decompress and process the data');
+    // Decompress and process the data
+    // const decompressedData = await this.decompressDataList(dataList);
+    console.timeEnd('Decompress and process the data');
+
+    console.time('Data Processing Time');
+    const groupedData = this.processDataParallel(dataList, keys, groupBy);
+    console.timeEnd('Data Processing Time');
+
+    console.timeEnd('Total Execution Time');
+
+    return groupedData;
+  }
+
+  // Fetch data from Redis in parallel using individual get calls
+  private async fetchDataInParallelGet(keys: string[]): Promise<(string | null)[]> {
+    console.time('Parallel Cache Fetch Time');
+
+    // Create an array of promises for each key
+    const fetchPromises = keys.map((key) => {
+      return this.redisService.get(key) as Promise<string | null>;
+    });
+
+    // Wait for all promises to resolve concurrently
+    const results = await Promise.all(fetchPromises);
+
+    console.timeEnd('Parallel Cache Fetch Time');
+
+    return results;
+  }
 
 }

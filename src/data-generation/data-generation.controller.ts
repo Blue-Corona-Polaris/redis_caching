@@ -138,4 +138,28 @@ export class DataGenerationController {
     return result;
   }
 
+
+   // Endpoint to handle the multiple combinations of metrics, years, months, and groupBy fields
+   @Post('multiple-metrics-combinations')
+   async fetchMetricsDataWithCombinations(
+     @Body() requestBody: { 
+       metricIds: string[], 
+       years: number[], 
+       months: string[], 
+       groupBy: string[] 
+     },
+   ) {
+     console.time('Total API Execution Time'); // Track the overall time for the API call
+ 
+     const { metricIds, years, months, groupBy } = requestBody;
+ 
+     // Fetch the data using the new service method
+     const result = await this.dataGenerationService.fetchMetricsDataWithCombinations(
+       metricIds, years, months, groupBy
+     );
+ 
+     console.timeEnd('Total API Execution Time'); // End total execution time
+ 
+     return result;
+   }
 }
