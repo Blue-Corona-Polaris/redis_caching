@@ -148,7 +148,7 @@ export class DataGenerationService {
   }
 
   // Method to fetch and group data based on groupBy fields
-  public async getDataGroupedBy(metricId: string, year: number, month: string, groupBy: string) {
+  public async getDataGroupedByTest(metricId: string, year: number, month: string, groupBy: string) {
     const cacheKey = `${metricId}_${year}_${month}`;
     const data = await this.redisService.get<Record<string, any>[]>(cacheKey);
 
@@ -214,6 +214,64 @@ export class DataGenerationService {
       key: cacheKey,
       groupedBy: groupByFields,
       result,
+    };
+  }
+  
+  // Method to fetch and group data based on groupBy fields
+  public async getDataGroupedBy(metricId: string, year: number, month: string, groupBy: string) {
+    const cacheKey = `${metricId}_${year}_${month}`;
+    const data = await this.redisService.get<Record<string, any>[]>(cacheKey);
+
+    // Ensure data is an array and not empty
+    if (!Array.isArray(data) || data.length === 0) {
+      return {
+        message: `No data found for key: ${cacheKey}`,
+      };
+    }
+
+    // Split the groupBy parameter into an array of fields
+    const groupByFields = groupBy.split(',').map((field) => field.trim());
+
+    // Validate that groupByFields are provided
+    if (groupByFields.length === 0) {
+      return {
+        message: 'No valid groupBy fields provided.',
+      };
+    }
+
+    // Group the data manually using plain JavaScript
+    const groupedData: Record<string, any> = {};
+
+    for (const item of data) {
+      // Construct the group key using the specified fields
+      const groupKey = groupByFields.map((field) => (field in item ? item[field] : `Unknown ${field}`)).join('|');
+
+      // Initialize the group if it does not exist
+      if (!groupedData[groupKey]) {
+        // Create a summary record for the group
+        const summaryRecord = groupByFields.reduce((obj, field) => {
+          obj[field] = item[field] ?? `Unknown ${field}`;
+          return obj;
+        }, {} as Record<string, any>);
+
+        // Include metricId, year, and month in the summary record
+        summaryRecord['metricId'] = metricId;
+        summaryRecord['year'] = year;
+        summaryRecord['month'] = month;
+
+        // Store the summary record in the grouped data
+        groupedData[groupKey] = summaryRecord;
+      }
+    }
+
+    // Convert grouped data into an array of records
+    const result = Object.values(groupedData);
+
+    return {
+      key: cacheKey,
+      groupedBy: groupByFields,
+      result,
+      count: result.length,
     };
   }
 }
