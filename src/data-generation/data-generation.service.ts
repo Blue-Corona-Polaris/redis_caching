@@ -545,15 +545,11 @@ export class DataGenerationService {
 
     // Fetch data from Redis in bulk using mget
     const dataList: (string | null)[] = await this.redisService.mget(keys);
-    
+
     console.timeEnd('Data Fetching from Cache'); // End cache fetching time
 
-    console.time('Data Processing Time'); // Track the data processing time
-
-    // Process the data by grouping it based on groupBy fields
-    const groupedData = this.processData(dataList, groupBy);
-
-    console.timeEnd('Data Processing Time'); // End data processing time
+    // Process the data to group it based on groupBy fields
+    const groupedData = this.processData(dataList, keys, groupBy);
 
     return groupedData;
   }
@@ -571,53 +567,84 @@ export class DataGenerationService {
     return keys;
   }
 
-  // Process the data by grouping it based on groupBy fields
-  private processData(dataList: (string | null)[], groupBy: string[]): any[] {
+  private processData(
+    dataList: (string | null)[],
+    keys: string[],
+    groupBy: string[]
+  ): any[] {
     const result: any[] = [];
-    const groupedResults: { [key: string]: any[] } = {};
-
-    // Flatten dataList if needed
-    const flatDataList = dataList.flat();
-
-    // Loop through flatDataList and process it
-    flatDataList.forEach((data, index) => {
+  
+    // Loop through dataList and process it
+    dataList.forEach((data, index) => {
       if (data) {
-        let parsedData;
         try {
-          // Check if the data is a string and needs to be parsed
-          if (typeof data === 'string') {
-            parsedData = JSON.parse(data); // Parse JSON string to object
-          } else {
-            parsedData = data; // If it's already an object, use it directly
-          }
-
-          // Use the groupBy fields to group the data
-          const groupKey = groupBy.map((field) => parsedData[field] || 'Unknown').join('|');
-
-          // Add the record to the appropriate group
-          if (!groupedResults[groupKey]) {
-            groupedResults[groupKey] = [];
-          }
-          groupedResults[groupKey].push(parsedData);
+          // If data is already an array of objects, use it directly
+          const dataArray:any = data;
+  
+          dataArray.forEach((obj) => {
+            // Extract metricId, year, and month from the Redis key
+            const [metricId, year, month] = keys[index].split('_');
+  
+            // Create a comprehensive group key using metricId, year, month, and all groupBy fields
+            const groupKey = [
+              metricId,
+              year,
+              month,
+              ...groupBy.map((field) => obj[field] || 'Unknown')
+            ].join('|');
+  
+            // Find or create a group for the current data
+            let group = result.find((g) => g.groupKey === groupKey);
+            if (!group) {
+              group = {
+                keys: [keys[index]], // Store the key for this group
+                groupedBy: ['metricId', 'year', 'month', ...groupBy], // Include all groupBy fields
+                result: [],
+                groupKey,
+              };
+              result.push(group);
+            }
+  
+            // Check if an entry with the same metricId, year, month, and groupBy fields already exists
+            const existingEntry = group.result.find((entry) =>
+              groupBy.every((field) => entry[field] === obj[field])
+            );
+  
+            if (existingEntry) {
+              // If an existing entry is found, merge the data (customize merging logic as needed)
+              groupBy.forEach((field) => {
+                existingEntry[field] = obj[field] || existingEntry[field];
+              });
+            } else {
+              // Add a new entry if no existing entry is found
+              const groupData = {
+                metricId,
+                year: parseInt(year, 10),
+                month,
+              };
+  
+              // Add all groupBy fields to the groupData object
+              groupBy.forEach((field) => {
+                groupData[field] = obj[field] || 'Unknown';
+              });
+  
+              // Push the new entry to the group's result array
+              group.result.push(groupData);
+            }
+          });
         } catch (error) {
-          this.logger.error(`Error parsing data for key at index ${index}: ${error.message}`);
+          this.logger.error(`Error processing data at index ${index}: ${error.message}`);
         }
       }
     });
-
-    // Prepare the final result with group and count
-    for (const [groupKey, items] of Object.entries(groupedResults)) {
-      result.push({
-        group: groupKey,
-        count: items.length,
-        result: items.map(item => groupBy.reduce((acc, field) => {
-          acc[field] = item[field];
-          return acc;
-        }, {}))
-      });
-    }
-
-    return result;
+  
+    // Return the result in the required structure
+    return result.map((group) => ({
+      keys: group.keys,
+      groupedBy: group.groupedBy,
+      result: group.result,
+    }));
   }
-
+  
+  
 }
