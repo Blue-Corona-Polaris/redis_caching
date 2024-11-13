@@ -572,19 +572,19 @@ export class DataGenerationService {
     keys: string[],
     groupBy: string[]
   ): any[] {
-    const result: any[] = [];
-  
-    // Loop through dataList and process it
-    dataList.forEach((data, index) => {
+    const groupedResults: any[] = [];
+
+    // Loop through dataList and process each entry
+    dataList.forEach((data:any, index) => {
       if (data) {
         try {
           // If data is already an array of objects, use it directly
-          const dataArray:any = data;
-  
+          const dataArray = data;
+
           dataArray.forEach((obj) => {
             // Extract metricId, year, and month from the Redis key
             const [metricId, year, month] = keys[index].split('_');
-  
+
             // Create a comprehensive group key using metricId, year, month, and all groupBy fields
             const groupKey = [
               metricId,
@@ -592,44 +592,34 @@ export class DataGenerationService {
               month,
               ...groupBy.map((field) => obj[field] || 'Unknown')
             ].join('|');
-  
-            // Find or create a group for the current data
-            let group = result.find((g) => g.groupKey === groupKey);
-            if (!group) {
-              group = {
-                keys: [keys[index]], // Store the key for this group
-                groupedBy: ['metricId', 'year', 'month', ...groupBy], // Include all groupBy fields
-                result: [],
-                groupKey,
-              };
-              result.push(group);
-            }
-  
-            // Check if an entry with the same metricId, year, month, and groupBy fields already exists
-            const existingEntry = group.result.find((entry) =>
-              groupBy.every((field) => entry[field] === obj[field])
+
+            // Check if an existing entry with the same group key exists
+            let existingEntry = groupedResults.find((entry) =>
+              entry.groupKey === groupKey
             );
-  
+
             if (existingEntry) {
-              // If an existing entry is found, merge the data (customize merging logic as needed)
+              // If an existing entry is found, update it (custom merging logic can be applied here)
               groupBy.forEach((field) => {
                 existingEntry[field] = obj[field] || existingEntry[field];
               });
             } else {
-              // Add a new entry if no existing entry is found
-              const groupData = {
+              // Create a new entry if none exists
+              const resultObject = {
                 metricId,
                 year: parseInt(year, 10),
                 month,
               };
-  
-              // Add all groupBy fields to the groupData object
+
+              // Add all groupBy fields to the result object
               groupBy.forEach((field) => {
-                groupData[field] = obj[field] || 'Unknown';
+                resultObject[field] = obj[field] || 'Unknown';
               });
-  
-              // Push the new entry to the group's result array
-              group.result.push(groupData);
+
+              // Add a unique groupKey for internal tracking (not part of final output)
+              resultObject['groupKey'] = groupKey;
+
+              groupedResults.push(resultObject);
             }
           });
         } catch (error) {
@@ -637,14 +627,11 @@ export class DataGenerationService {
         }
       }
     });
-  
-    // Return the result in the required structure
-    return result.map((group) => ({
-      keys: group.keys,
-      groupedBy: group.groupedBy,
-      result: group.result,
-    }));
+
+    // Return only the result array, excluding the internal groupKey
+    return groupedResults.map(({ groupKey, ...rest }) => rest);
   }
-  
-  
+
+
+
 }
