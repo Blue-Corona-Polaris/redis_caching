@@ -343,8 +343,8 @@ export class DataGenerationService {
     };
   }
 
-   // Method to handle multiple metrics
-   async getMultipleMetricsData(
+  // Method to handle multiple metrics
+  async getMultipleMetricsData(
     metricIds: string[],
     year: number,
     month: string,
@@ -528,6 +528,96 @@ export class DataGenerationService {
       result: groupedResults,
       count: groupedResults.length,
     };
+  }
+
+  // Fetch data in bulk using mget
+  async getMultipleMetricsDataSingleCall(
+    metricIds: string[],
+    years: number[],
+    months: string[],
+    groupBy: string[]
+  ) {
+    console.time('Data Fetching from Cache'); // Track the cache fetching time
+
+    // Generate all possible combinations of metricIds, years, months
+    const keys = this.generateKeys(metricIds, years, months);
+    console.log('Generated Keys:', keys);
+
+    // Fetch data from Redis in bulk using mget
+    const dataList: (string | null)[] = await this.redisService.mget(keys);
+    
+    console.timeEnd('Data Fetching from Cache'); // End cache fetching time
+
+    console.time('Data Processing Time'); // Track the data processing time
+
+    // Process the data by grouping it based on groupBy fields
+    const groupedData = this.processData(dataList, groupBy);
+
+    console.timeEnd('Data Processing Time'); // End data processing time
+
+    return groupedData;
+  }
+
+  // Helper method to generate Redis keys from combinations
+  private generateKeys(metricIds: string[], years: number[], months: string[]): string[] {
+    const keys: string[] = [];
+    metricIds.forEach((metricId) => {
+      years.forEach((year) => {
+        months.forEach((month) => {
+          keys.push(`${metricId}_${year}_${month}`);
+        });
+      });
+    });
+    return keys;
+  }
+
+  // Process the data by grouping it based on groupBy fields
+  private processData(dataList: (string | null)[], groupBy: string[]): any[] {
+    const result: any[] = [];
+    const groupedResults: { [key: string]: any[] } = {};
+
+    // Flatten dataList if needed
+    const flatDataList = dataList.flat();
+
+    // Loop through flatDataList and process it
+    flatDataList.forEach((data, index) => {
+      if (data) {
+        let parsedData;
+        try {
+          // Check if the data is a string and needs to be parsed
+          if (typeof data === 'string') {
+            parsedData = JSON.parse(data); // Parse JSON string to object
+          } else {
+            parsedData = data; // If it's already an object, use it directly
+          }
+
+          // Use the groupBy fields to group the data
+          const groupKey = groupBy.map((field) => parsedData[field] || 'Unknown').join('|');
+
+          // Add the record to the appropriate group
+          if (!groupedResults[groupKey]) {
+            groupedResults[groupKey] = [];
+          }
+          groupedResults[groupKey].push(parsedData);
+        } catch (error) {
+          this.logger.error(`Error parsing data for key at index ${index}: ${error.message}`);
+        }
+      }
+    });
+
+    // Prepare the final result with group and count
+    for (const [groupKey, items] of Object.entries(groupedResults)) {
+      result.push({
+        group: groupKey,
+        count: items.length,
+        result: items.map(item => groupBy.reduce((acc, field) => {
+          acc[field] = item[field];
+          return acc;
+        }, {}))
+      });
+    }
+
+    return result;
   }
 
 }

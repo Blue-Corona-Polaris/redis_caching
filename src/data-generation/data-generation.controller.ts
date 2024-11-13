@@ -114,5 +114,28 @@ export class DataGenerationController {
     return combinations;
   }
 
-  
+  // Endpoint to handle the multiple combinations in a single API call
+  @Post('multiple-combinations-single-call')
+  async getMultipleCombinationsDataSingleCall(
+    @Body() requestBody: { 
+      metricIds: string[], 
+      years: number[], 
+      months: string[], 
+      groupBy: string[] 
+    },
+  ) {
+    console.time('Total API Execution Time'); // Track the overall time for the API call
+
+    const { metricIds, years, months, groupBy } = requestBody;
+
+    // Get all combinations of metricIds, years, months, and groupBy
+    const result = await this.dataGenerationService.getMultipleMetricsDataSingleCall(
+      metricIds, years, months, groupBy
+    );
+
+    console.timeEnd('Total API Execution Time'); // End total execution time
+
+    return result;
+  }
+
 }
