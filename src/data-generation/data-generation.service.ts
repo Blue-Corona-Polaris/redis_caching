@@ -4,6 +4,7 @@ import * as path from 'path';
 import { RedisService } from '../redis/redis.service';
 import { from } from 'rxjs';
 import { mergeMap, toArray } from 'rxjs/operators';
+import * as zlib from 'zlib';
 
 @Injectable()
 export class DataGenerationService {
@@ -41,6 +42,21 @@ export class DataGenerationService {
     return data;
   }
 
+  // Compress data using zlib
+  private compressData(data: any[]): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const jsonData = JSON.stringify(data); // Convert data to JSON string
+
+      zlib.gzip(jsonData, (err, buffer) => {
+        if (err) {
+          reject(err); // Handle any compression errors
+        } else {
+          resolve(buffer); // Return the compressed data as a Buffer
+        }
+      });
+    });
+  }
+
   // Generate dataset for a specific metric, year, and month
   private async generateAndCacheDataForMetric(metric: string, inputData: any) {
     for (const year of this.years) {
@@ -64,7 +80,9 @@ export class DataGenerationService {
         }
 
         const cacheKey = `${metric}_${year}_${month}`;
-        await this.redisService.set(cacheKey, dataset, this.ttl);
+        // Compress the generated dataset
+        const compressedData = await this.compressData(dataset);
+        await this.redisService.set(cacheKey, compressedData, this.ttl);
         console.log(`Stored dataset in Redis with key: ${cacheKey}`);
       }
     }
@@ -539,24 +557,24 @@ export class DataGenerationService {
     groupBy: string[]
   ) {
     console.time('Total Execution Time');
-  
+
     console.time('Key Generation Time');
     const keys = this.generateKeys(metricIds, years, months);
     console.timeEnd('Key Generation Time');
-  
+
     console.time('Data Fetching from Cache with Parallelism');
     const dataList = await this.fetchDataInParallel(keys, 100); // Fetch data in parallel
     console.timeEnd('Data Fetching from Cache with Parallelism');
-  
+
     console.time('Data Processing Time');
     const groupedData = this.processDataParallel(dataList, keys, groupBy);
     console.timeEnd('Data Processing Time');
-  
+
     console.timeEnd('Total Execution Time');
-  
+
     return groupedData;
   }
-  
+
 
   // Helper method to generate Redis keys from combinations
   private generateKeys(metricIds: string[], years: number[], months: string[]): string[] {
@@ -573,26 +591,26 @@ export class DataGenerationService {
 
   private async fetchDataInParallel(keys: string[], batchSize: number): Promise<(string | null)[]> {
     console.time('Parallel Cache Fetch Time');
-  
+
     const batches: string[][] = [];
     for (let i = 0; i < keys.length; i += batchSize) {
       const batch = keys.slice(i, i + batchSize);
       batches.push(batch);
     }
-  
+
     // Fetch all batches in parallel using Promise.all and assert the type
     const fetchPromises = batches.map((batch) =>
       this.redisService.mget(batch) as Promise<(string | null)[]>
     );
-  
+
     const results = await Promise.all(fetchPromises);
-  
+
     console.timeEnd('Parallel Cache Fetch Time');
-  
+
     // Flatten the results from all batches and assert the type
     return results.flat() as (string | null)[];
   }
-  
+
 
   // Process the data in parallel using RxJS
   private async processDataParallel(
