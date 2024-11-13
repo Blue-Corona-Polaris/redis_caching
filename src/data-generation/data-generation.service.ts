@@ -537,25 +537,33 @@ export class DataGenerationService {
     months: string[],
     groupBy: string[]
   ) {
-    console.time('Data Fetching from Cache'); // Track the cache fetching time
+    console.time('Total Execution Time'); // Track the total execution time
 
+    console.time('Key Generation Time');
     // Generate all possible combinations of metricIds, years, months
     const keys = this.generateKeys(metricIds, years, months);
+    console.timeEnd('Key Generation Time');
+
     console.log('Generated Keys:', keys);
 
+    console.time('Data Fetching from Cache'); // Track the cache fetching time
     // Fetch data from Redis in bulk using mget
     const dataList: (string | null)[] = await this.redisService.mget(keys);
-
     console.timeEnd('Data Fetching from Cache'); // End cache fetching time
 
+    console.time('Data Processing Time'); // Track data processing time
     // Process the data to group it based on groupBy fields
     const groupedData = this.processData(dataList, keys, groupBy);
+    console.timeEnd('Data Processing Time'); // End data processing time
+
+    console.timeEnd('Total Execution Time'); // End the total execution time
 
     return groupedData;
   }
 
   // Helper method to generate Redis keys from combinations
   private generateKeys(metricIds: string[], years: number[], months: string[]): string[] {
+    console.time('Key Combination Loop Time');
     const keys: string[] = [];
     metricIds.forEach((metricId) => {
       years.forEach((year) => {
@@ -564,23 +572,30 @@ export class DataGenerationService {
         });
       });
     });
+    console.timeEnd('Key Combination Loop Time');
     return keys;
   }
 
+  // Process the data by grouping it based on metricId, year, month, and groupBy fields
   private processData(
     dataList: (string | null)[],
     keys: string[],
     groupBy: string[]
   ): any[] {
+    console.time('Initialization Time');
     const groupedResults: any[] = [];
+    const resultMap = new Map<string, any>(); // Use a Map for faster lookups
+    console.timeEnd('Initialization Time');
 
+    console.time('DataList Loop Time'); // Track time for looping through dataList
     // Loop through dataList and process each entry
-    dataList.forEach((data:any, index) => {
+    dataList.forEach((data: any, index) => {
       if (data) {
         try {
-          // If data is already an array of objects, use it directly
-          const dataArray = data;
+          console.time('Data Array Loop Time');
+          const dataArray = data; // Assume data is already an array of objects
 
+          // Loop through each object in the dataArray
           dataArray.forEach((obj) => {
             // Extract metricId, year, and month from the Redis key
             const [metricId, year, month] = keys[index].split('_');
@@ -592,12 +607,10 @@ export class DataGenerationService {
               month,
               ...groupBy.map((field) => obj[field] || 'Unknown')
             ].join('|');
-
-            // Check if an existing entry with the same group key exists
-            let existingEntry = groupedResults.find((entry) =>
-              entry.groupKey === groupKey
-            );
-
+            
+            // Check if an existing entry with the same group key exists using the Map
+            let existingEntry = resultMap.get(groupKey);
+            
             if (existingEntry) {
               // If an existing entry is found, update it (custom merging logic can be applied here)
               groupBy.forEach((field) => {
@@ -616,22 +629,27 @@ export class DataGenerationService {
                 resultObject[field] = obj[field] || 'Unknown';
               });
 
-              // Add a unique groupKey for internal tracking (not part of final output)
-              resultObject['groupKey'] = groupKey;
-
+              // Store the entry in the Map and add to groupedResults
+              resultMap.set(groupKey, resultObject);
               groupedResults.push(resultObject);
             }
           });
+          console.timeEnd('Data Array Loop Time');
         } catch (error) {
+          console.timeEnd('Data Array Loop Time');
           this.logger.error(`Error processing data at index ${index}: ${error.message}`);
         }
       }
     });
+    console.timeEnd('DataList Loop Time');
 
-    // Return only the result array, excluding the internal groupKey
-    return groupedResults.map(({ groupKey, ...rest }) => rest);
+    console.time('Result Mapping Time');
+    // Return only the result array
+    const resultArray = groupedResults.map(({ groupKey, ...rest }) => rest);
+    console.timeEnd('Result Mapping Time');
+
+    return resultArray;
   }
-
 
 
 }
