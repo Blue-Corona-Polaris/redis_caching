@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class DataGenerationService {
+  private readonly logger = new Logger(DataGenerationService.name);
   private inputFolder = path.join(process.cwd(), 'input'); // Folder parallel to 'src'
   private years = [2023, 2024];
   private months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
@@ -216,7 +217,7 @@ export class DataGenerationService {
       result,
     };
   }
-  
+
   // Method to fetch and group data based on groupBy fields
   public async getDataGroupedBy(metricId: string, year: number, month: string, groupBy: string) {
     const cacheKey = `${metricId}_${year}_${month}`;
@@ -266,6 +267,73 @@ export class DataGenerationService {
 
     // Convert grouped data into an array of records
     const result = Object.values(groupedData);
+
+    return {
+      key: cacheKey,
+      groupedBy: groupByFields,
+      result,
+      count: result.length,
+    };
+  }
+
+  // Method to fetch and group data based on groupBy fields with performance logging
+  public async getDataGroupedByPerfMetrics(metricId: string, year: number, month: string, groupBy: string) {
+    const cacheKey = `${metricId}_${year}_${month}`;
+    this.logger.log(`Starting to process key: ${cacheKey}`);
+
+    console.time('Total Execution Time');
+
+    // Measure time for fetching data from Redis
+    console.time('Redis Fetch Time');
+    const data = await this.redisService.get<Record<string, any>[]>(cacheKey);
+    console.timeEnd('Redis Fetch Time');
+
+    // Ensure data is an array and not empty
+    if (!Array.isArray(data) || data.length === 0) {
+      this.logger.log(`No data found for key: ${cacheKey}`);
+      return {
+        message: `No data found for key: ${cacheKey}`,
+      };
+    }
+
+    // Measure time for processing groupBy fields
+    console.time('GroupBy Processing Time');
+    const groupByFields = groupBy.split(',').map((field) => field.trim());
+    if (groupByFields.length === 0) {
+      return {
+        message: 'No valid groupBy fields provided.',
+      };
+    }
+    console.timeEnd('GroupBy Processing Time');
+
+    // Measure time for grouping the data
+    console.time('Data Grouping Time');
+    const groupedData: Record<string, any> = {};
+
+    for (const item of data) {
+      const groupKey = groupByFields.map((field) => (field in item ? item[field] : `Unknown ${field}`)).join('|');
+
+      if (!groupedData[groupKey]) {
+        const summaryRecord = groupByFields.reduce((obj, field) => {
+          obj[field] = item[field] ?? `Unknown ${field}`;
+          return obj;
+        }, {} as Record<string, any>);
+
+        summaryRecord['metricId'] = metricId;
+        summaryRecord['year'] = year;
+        summaryRecord['month'] = month;
+
+        groupedData[groupKey] = summaryRecord;
+      }
+    }
+    console.timeEnd('Data Grouping Time');
+
+    // Measure time for converting grouped data to array
+    console.time('Result Formatting Time');
+    const result = Object.values(groupedData);
+    console.timeEnd('Result Formatting Time');
+
+    console.timeEnd('Total Execution Time');
 
     return {
       key: cacheKey,

@@ -25,6 +25,6 @@ export class DataGenerationController {
     @Post('group-data')
     async getGroupedData(@Body() payload: { metricId: string; year: number; month: string; groupBy: string }) {
       const { metricId, year, month, groupBy } = payload;
-      return await this.dataGenerationService.getDataGroupedBy(metricId, year, month, groupBy);
+      return await this.dataGenerationService.getDataGroupedByPerfMetrics(metricId, year, month, groupBy);
     }
 }
