@@ -532,7 +532,6 @@ export class DataGenerationService {
     };
   }
 
-  // Fetch data in bulk using mget
   async getMultipleMetricsDataSingleCall(
     metricIds: string[],
     years: number[],
@@ -540,27 +539,27 @@ export class DataGenerationService {
     groupBy: string[]
   ) {
     console.time('Total Execution Time');
-
+  
     console.time('Key Generation Time');
     const keys = this.generateKeys(metricIds, years, months);
     console.timeEnd('Key Generation Time');
-
-    console.time('Data Fetching from Cache');
-    const dataList: (string | null)[] = await this.redisService.mget(keys);
-    console.timeEnd('Data Fetching from Cache');
-
+  
+    console.time('Data Fetching from Cache with Parallelism');
+    const dataList = await this.fetchDataInParallel(keys, 100); // Fetch data in parallel
+    console.timeEnd('Data Fetching from Cache with Parallelism');
+  
     console.time('Data Processing Time');
-    const groupedData = await this.processDataParallel(dataList, keys, groupBy);
+    const groupedData = this.processDataParallel(dataList, keys, groupBy);
     console.timeEnd('Data Processing Time');
-
+  
     console.timeEnd('Total Execution Time');
-
+  
     return groupedData;
   }
+  
 
   // Helper method to generate Redis keys from combinations
   private generateKeys(metricIds: string[], years: number[], months: string[]): string[] {
-    console.time('Key Combination Loop Time');
     const keys: string[] = [];
     metricIds.forEach((metricId) => {
       years.forEach((year) => {
@@ -569,30 +568,46 @@ export class DataGenerationService {
         });
       });
     });
-    console.timeEnd('Key Combination Loop Time');
     return keys;
   }
 
+  private async fetchDataInParallel(keys: string[], batchSize: number): Promise<(string | null)[]> {
+    console.time('Parallel Cache Fetch Time');
+  
+    const batches: string[][] = [];
+    for (let i = 0; i < keys.length; i += batchSize) {
+      const batch = keys.slice(i, i + batchSize);
+      batches.push(batch);
+    }
+  
+    // Fetch all batches in parallel using Promise.all and assert the type
+    const fetchPromises = batches.map((batch) =>
+      this.redisService.mget(batch) as Promise<(string | null)[]>
+    );
+  
+    const results = await Promise.all(fetchPromises);
+  
+    console.timeEnd('Parallel Cache Fetch Time');
+  
+    // Flatten the results from all batches and assert the type
+    return results.flat() as (string | null)[];
+  }
+  
+
   // Process the data in parallel using RxJS
-  private processDataParallel(
+  private async processDataParallel(
     dataList: (string | null)[],
     keys: string[],
     groupBy: string[]
   ): Promise<any[]> {
-    console.time('Initialization Time');
     const resultMap = new Map<string, any>();
-    console.timeEnd('Initialization Time');
 
-    console.time('DataList Processing with RxJS');
-
-    // Use RxJS `from` to create an observable stream from dataList
     return from(dataList).pipe(
       mergeMap((data, index) => {
         if (!data) return []; // Skip if data is null
 
         try {
-          console.time(`Data Array Processing Time [${index}]`);
-          const dataArray:any = data; // Assume data is already an array of objects
+          const dataArray: any = data; // Assume data is already an array of objects
 
           dataArray.forEach((obj) => {
             const [metricId, year, month] = keys[index].split('_');
@@ -622,8 +637,6 @@ export class DataGenerationService {
               resultMap.set(groupKey, resultObject);
             }
           });
-
-          console.timeEnd(`Data Array Processing Time [${index}]`);
         } catch (error) {
           this.logger.error(`Error processing data at index ${index}: ${error.message}`);
         }
@@ -631,14 +644,8 @@ export class DataGenerationService {
         return [];
       }, 10), // Concurrency level of 10 (adjust as needed)
       toArray()
-    ).toPromise().then(() => {
-      console.time('Result Mapping Time');
-      const resultArray = Array.from(resultMap.values());
-      console.timeEnd('Result Mapping Time');
-
-      console.timeEnd('DataList Processing with RxJS');
-      return resultArray;
-    });
+    ).toPromise().then(() => Array.from(resultMap.values()));
   }
+
 
 }
