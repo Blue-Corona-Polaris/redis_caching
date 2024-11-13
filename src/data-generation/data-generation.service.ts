@@ -401,4 +401,132 @@ export class DataGenerationService {
       count: groupedResults.length,
     };
   }
+
+  async getMultipleMetricsDataPerfMetrics(
+    metricIds: string[],
+    year: number,
+    month: string,
+    groupBy: string
+  ): Promise<any> {
+    console.time('Build Keys Time'); // Track the time it takes to build the Redis keys
+    const keys = metricIds.map((metricId) => `${metricId}_${year}_${month}`);
+    console.timeEnd('Build Keys Time');
+
+    console.time('MGET Redis Call Time'); // Track the time for the MGET Redis call
+    const dataList = await this.redisService.mget(keys);
+    console.timeEnd('MGET Redis Call Time');
+
+    const groupedResults = [];
+
+    // Process the data for each metricId
+    for (let i = 0; i < dataList.length; i++) {
+      console.time(`Processing Metric ID: ${metricIds[i]} Time`); // Track time to process each metric
+
+      const data = dataList[i];
+      const metricId = metricIds[i];
+
+      if (!data) {
+        this.logger.warn(`No data found for key: ${keys[i]}`);
+        continue;
+      }
+
+      // Cast the `data` to an array, assuming it is an array of objects
+      const dataArray = data as Array<{ [key: string]: any }>;
+
+      // Split the groupBy parameter into an array of fields
+      const groupByFields = groupBy.split(',').map((field) => field.trim());
+      const resultMap = new Map();
+
+      // Grouping the data by fields
+      dataArray.forEach((item) => {
+        const groupKey = groupByFields
+          .map((field) => item[field] ?? `Unknown ${field}`)
+          .join('|');
+        if (!resultMap.has(groupKey)) {
+          resultMap.set(groupKey, {
+            metricId,
+            year,
+            month,
+            ...Object.fromEntries(groupByFields.map((field) => [field, item[field] ?? `Unknown ${field}`])),
+          });
+        }
+      });
+
+      // Add the grouped results to the final output
+      groupedResults.push(...Array.from(resultMap.values()));
+
+      console.timeEnd(`Processing Metric ID: ${metricIds[i]} Time`); // End processing time for this metric
+    }
+
+    return {
+      keys,
+      groupedBy: groupBy.split(','),
+      result: groupedResults,
+      count: groupedResults.length,
+    };
+  }
+
+  async getMultipleMetricsGroupedData(
+    metricIds: string[],
+    year: number,
+    month: string,
+    groupBy: string
+  ): Promise<any> {
+    console.time('Build Keys Time'); // Track the time it takes to build the Redis keys
+    const keys = metricIds.map((metricId) => `${metricId}_${year}_${month}`);
+    console.timeEnd('Build Keys Time');
+
+    console.time('MGET Redis Call Time'); // Track the time for the MGET Redis call
+    const dataList = await this.redisService.mget(keys);
+    console.timeEnd('MGET Redis Call Time');
+
+    const groupedResults = [];
+
+    // Process the data for each metricId
+    for (let i = 0; i < dataList.length; i++) {
+      console.time(`Processing Metric ID: ${metricIds[i]} Time`); // Track time to process each metric
+
+      const data = dataList[i];
+      const metricId = metricIds[i];
+
+      if (!data) {
+        this.logger.warn(`No data found for key: ${keys[i]}`);
+        continue;
+      }
+
+      // Cast the `data` to an array, assuming it is an array of objects
+      const dataArray = data as Array<{ [key: string]: any }>;
+
+      // Split the groupBy parameter into an array of fields
+      const groupByFields = groupBy.split(',').map((field) => field.trim());
+      const resultMap = new Map();
+
+      // Grouping the data by fields
+      dataArray.forEach((item) => {
+        const groupKey = groupByFields
+          .map((field) => item[field] ?? `Unknown ${field}`)
+          .join('|');
+        if (!resultMap.has(groupKey)) {
+          resultMap.set(groupKey, {
+            metricId,
+            year,
+            month,
+            ...Object.fromEntries(groupByFields.map((field) => [field, item[field] ?? `Unknown ${field}`])),
+          });
+        }
+      });
+
+      // Add the grouped results to the final output
+      groupedResults.push(...Array.from(resultMap.values()));
+
+      console.timeEnd(`Processing Metric ID: ${metricIds[i]} Time`); // End processing time for this metric
+    }
+
+    return {
+      keys,
+      groupedBy: groupBy.split(','),
+      result: groupedResults,
+      count: groupedResults.length,
+    };
+  }
 }
