@@ -81,8 +81,8 @@ export class DataGenerationService {
 
         const cacheKey = `${metric}_${year}_${month}`;
         // Compress the generated dataset
-        const compressedData = await this.compressData(dataset);
-        await this.redisService.set(cacheKey, compressedData, this.ttl);
+        // const compressedData = await this.compressData(dataset);
+        await this.redisService.set(cacheKey, dataset, this.ttl);
         console.log(`Stored dataset in Redis with key: ${cacheKey}`);
       }
     }
@@ -566,6 +566,11 @@ export class DataGenerationService {
     const dataList = await this.fetchDataInParallel(keys, 100); // Fetch data in parallel
     console.timeEnd('Data Fetching from Cache with Parallelism');
 
+    console.time('Decompress and process the data');
+    // Decompress and process the data
+    // const decompressedData = await this.decompressDataList(dataList);
+    console.timeEnd('Decompress and process the data');
+
     console.time('Data Processing Time');
     const groupedData = this.processDataParallel(dataList, keys, groupBy);
     console.timeEnd('Data Processing Time');
@@ -575,6 +580,25 @@ export class DataGenerationService {
     return groupedData;
   }
 
+   // Decompress the fetched data from Redis
+   private async decompressDataList(dataList: (string | null)[]): Promise<any[]> {
+    const decompressedDataPromises = dataList.map((data) => {
+      if (data) {
+        return new Promise<any>((resolve, reject) => {
+          zlib.gunzip(Buffer.from(data, 'base64'), (err, decompressedBuffer) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(JSON.parse(decompressedBuffer.toString()));
+            }
+          });
+        });
+      }
+      return Promise.resolve([]);
+    });
+
+    return Promise.all(decompressedDataPromises);
+  }
 
   // Helper method to generate Redis keys from combinations
   private generateKeys(metricIds: string[], years: number[], months: string[]): string[] {
