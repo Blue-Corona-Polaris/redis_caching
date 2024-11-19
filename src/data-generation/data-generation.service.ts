@@ -83,7 +83,7 @@ export class DataGenerationService {
         // Compress the generated dataset
         const compressedData = await this.compressData(dataset);
         await this.redisService.set(cacheKey, compressedData, this.ttl);
-        console.log(`Stored dataset in Redis with key: ${cacheKey}`);
+        console.log(`Stored dataset in Redis with key: ${cacheKey} length ${dataset.length}`);
       }
     }
   }
