@@ -13,12 +13,12 @@ export class RedisGenerateService {
 //   ];
   private readonly weeks = Array.from({ length: 52 }, (_, i) => `Week ${i + 1}`);
   private readonly days = Array.from({ length: 31 }, (_, i) => `Day ${i + 1}`);
-  private readonly totalRecords = 10_000_000;
+  private readonly totalRecords = 100_000_000;
   private readonly batchSize = 1000;
-  private readonly metrics = Array.from({ length: 2 }, (_, i) => `metric${i + 1}`);
+  private readonly metrics = Array.from({ length: 500 }, (_, i) => `metric${i + 1}`);
 //   private readonly years = [2023, 2024];
   private readonly months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-  private readonly recordCount = 100_000; // 1 lakh records per key
+  private readonly recordCount = 100_00; // 10K records per key
 
 
   constructor(private readonly redisService: RedisService) {}
