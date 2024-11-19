@@ -63,7 +63,7 @@ export class DataGenerationService {
       for (const month of this.months) {
         const dataset = [];
 
-        for (let i = 0; i < 100000; i++) {
+        for (let i = 0; i < 10000; i++) {
           const record: any = {
             year,
             month,
@@ -81,8 +81,8 @@ export class DataGenerationService {
 
         const cacheKey = `${metric}_${year}_${month}`;
         // Compress the generated dataset
-        // const compressedData = await this.compressData(dataset);
-        await this.redisService.set(cacheKey, dataset, this.ttl);
+        const compressedData = await this.compressData(dataset);
+        await this.redisService.set(cacheKey, compressedData, this.ttl);
         console.log(`Stored dataset in Redis with key: ${cacheKey}`);
       }
     }
