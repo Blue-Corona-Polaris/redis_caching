@@ -63,7 +63,7 @@ export class DataGenerationService {
       for (const month of this.months) {
         const dataset = [];
 
-        for (let i = 0; i < 10000; i++) {
+        for (let i = 0; i < 100000; i++) {
           const record: any = {
             year,
             month,
